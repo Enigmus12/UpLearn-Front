@@ -40,8 +40,13 @@ class ApiUserService {
   // Obtiene información del usuario autenticado desde el token
   static getCurrentUser() {
     const decoded = this.decodeToken();
+    if (!decoded) return null;
+    
+    console.log('Token decodificado:', decoded);
+
+    // nosotros en el backend usamos 'sub' para userId y 'role' para el rol
     return decoded ? {
-      userId: decoded.userId,
+      userId: decoded.sub,    // En JWT estándar, 'sub' es el subject (userId)
       role: decoded.role
     } : null;
   }
@@ -50,32 +55,42 @@ class ApiUserService {
 
   /**
    * Autentica un usuario en el sistema
-   * @param {string} userName - Nombre de usuario
+   * @param {string} userId - ID del usuario (no userName)
    * @param {string} password - Contraseña
    * @returns {Promise<AuthenticationResponseDTO>}
    */
-  static async login(userName, password) {
+  static async login(userId, password) {
     try {
+      console.log('Enviando petición de login:', { userId, password });
+      
       const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userName: userName,
+          userId: userId,
           password: password
         }),
       });
 
+      console.log('Respuesta del servidor:', response.status, response.statusText);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor:', errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('Datos recibidos del servidor:', data);
       
       // Si la autenticación es exitosa, guardar el token
-      if (data.success && data.token) {
+      // Actualizar para usar la estructura real de respuesta
+      if (data.authenticated && data.token) {
+        console.log('Login exitoso, guardando token:', data.token);
         this.setToken(data.token);
+        console.log('Token guardado correctamente');
       }
       
       return data;
@@ -157,6 +172,126 @@ class ApiUserService {
   // ========== GESTIÓN DE USUARIOS ==========
 
   /**
+   * Obtiene los datos editables del usuario autenticado
+   * @returns {Promise<UserUpdateDTO>}
+   */
+  static async getEditableProfile() {
+    const token = this.getToken();
+    if (!token) {
+      throw new Error('No hay token de autenticación');
+    }
+
+    try {
+      console.log('Obteniendo datos editables del perfil');
+      
+      const response = await fetch(`${API_BASE_URL}/editable-profile`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      console.log('Respuesta del servidor:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Datos editables obtenidos:', data);
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo datos editables:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualiza el perfil del usuario autenticado
+   * @param {Object} updateData - Datos a actualizar
+   * @returns {Promise<User>}
+   */
+  static async updateProfile(updateData) {
+    const token = this.getToken();
+    if (!token) {
+      throw new Error('No hay token de autenticación');
+    }
+
+    try {
+      console.log('Enviando actualización de perfil:', updateData);
+      
+      const response = await fetch(`${API_BASE_URL}/update-profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      console.log('Respuesta del servidor:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Perfil actualizado:', data);
+      return data;
+    } catch (error) {
+      console.error('Error actualizando perfil:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Elimina la cuenta del usuario autenticado
+   * @returns {Promise<string>}
+   */
+  static async deleteProfile() {
+    const token = this.getToken();
+    if (!token) {
+      throw new Error('No hay token de autenticación');
+    }
+
+    try {
+      console.log('Eliminando cuenta del usuario');
+      
+      const response = await fetch(`${API_BASE_URL}/delete-profile`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      console.log('Respuesta del servidor:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const message = await response.text();
+      console.log('Cuenta eliminada:', message);
+      
+      // Limpiar token después de eliminar cuenta
+      this.clearToken();
+      
+      return message;
+    } catch (error) {
+      console.error('Error eliminando cuenta:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Obtiene todos los usuarios (requiere autenticación)
    * @returns {Promise<User[]>}
    */
@@ -209,32 +344,7 @@ class ApiUserService {
     }
   }
 
-  /**
-   * Elimina un usuario por su ID (requiere autenticación)
-   * @param {string} userId - ID del usuario a eliminar
-   * @returns {Promise<User[]>} - Lista actualizada de usuarios
-   */
-  static async deleteUser(userId) {
-    const token = this.getToken();
-    try {
-      const response = await fetch(`${API_BASE_URL}/Delete-user/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      return response.json();
-    } catch (error) {
-      console.error('Error eliminando usuario:', error);
-      throw error;
-    }
-  }
 }
 
 export default ApiUserService; 

@@ -6,12 +6,12 @@ import '../styles/LoginPage.css';
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    username: '',
+    userId: '',
     password: ''
   });
 
   const [errors, setErrors] = useState({
-    username: '',
+    userId: '',
     password: '',
     general: ''
   });
@@ -36,13 +36,13 @@ const LoginPage: React.FC = () => {
 
   const validateForm = () => {
     const newErrors = {
-      username: '',
+      userId: '',
       password: '',
       general: ''
     };
 
-    if (!formData.username.trim()) {
-      newErrors.username = 'El usuario es requerido';
+    if (!formData.userId.trim()) {
+      newErrors.userId = 'El ID de usuario es requerido';
     }
 
     if (!formData.password.trim()) {
@@ -52,7 +52,7 @@ const LoginPage: React.FC = () => {
     }
 
     setErrors(newErrors);
-    return !newErrors.username && !newErrors.password;
+    return !newErrors.userId && !newErrors.password;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,20 +66,20 @@ const LoginPage: React.FC = () => {
     setErrors(prev => ({ ...prev, general: '' }));
 
     try {
-      const response = await ApiUserService.login(formData.username, formData.password);
+      const response = await ApiUserService.login(formData.userId, formData.password);
       
-      if (response.success) {
+      // { authenticated, user, token, message }
+      if (response.authenticated) {
         // Login exitoso
         alert(`¡Bienvenido ${response.user.name}!`);
         
-        // Redirigir según el rol del usuario
-        const currentUser = ApiUserService.getCurrentUser();
-        if (currentUser?.role === 'STUDENT') {
-          // Redirigir a dashboard de estudiante (por ahora a home)
-          navigate('/');
-        } else if (currentUser?.role === 'TUTOR') {
-          // Redirigir a dashboard de tutor (por ahora a home)
-          navigate('/');
+        // Redirigir según el rol del usuario desde la respuesta
+        if (response.user.role === 'STUDENT') {
+          // Redirigir a dashboard de estudiante
+          navigate('/student-dashboard');
+        } else if (response.user.role === 'TUTOR') {
+          // Redirigir a dashboard de tutor
+          navigate('/tutor-dashboard');
         } else {
           navigate('/');
         }
@@ -125,21 +125,21 @@ const LoginPage: React.FC = () => {
           )}
           
           <div className="form-group">
-            <label htmlFor="username" className="form-label">
-              Usuario
+            <label htmlFor="userId" className="form-label">
+              ID de Usuario
             </label>
             <input
               type="text"
-              id="username"
-              name="username"
-              className={`form-input ${errors.username ? 'error' : ''}`}
-              placeholder="Ingresa tu usuario"
-              value={formData.username}
+              id="userId"
+              name="userId"
+              className={`form-input ${errors.userId ? 'error' : ''}`}
+              placeholder="Ingresa tu ID de usuario"
+              value={formData.userId}
               onChange={handleInputChange}
               disabled={isLoading}
             />
-            {errors.username && (
-              <span className="error-message">{errors.username}</span>
+            {errors.userId && (
+              <span className="error-message">{errors.userId}</span>
             )}
           </div>
 
