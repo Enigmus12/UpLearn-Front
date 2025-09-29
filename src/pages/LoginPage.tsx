@@ -1,105 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ApiUserService from '../service/Api-user';
+import { useAuth } from "react-oidc-context";
 import '../styles/LoginPage.css';
+import { getUserAuthInfo } from '../utils/tokenUtils';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    userId: '',
-    password: ''
-  });
+  const auth = useAuth();
 
-  const [errors, setErrors] = useState({
-    userId: '',
-    password: '',
-    general: ''
-  });
-
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Limpiar errores cuando el usuario empiece a escribir
-    if (errors[name as keyof typeof errors]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
+  // Función de redirección de cierre de sesión para Cognito
+  const signOutRedirect = () => {
+    const clientId = "lmk8qk12er8t8ql9phit3u12e";
+    const logoutUri = "http://localhost:3000";
+    const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
+    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
 
-  const validateForm = () => {
-    const newErrors = {
-      userId: '',
-      password: '',
-      general: ''
-    };
-
-    if (!formData.userId.trim()) {
-      newErrors.userId = 'El ID de usuario es requerido';
+  // Verificar el estado de autenticación y redirigir si ya ha iniciado sesión
+  useEffect(() => {
+    if (auth.isAuthenticated && auth.user) {
+      const { redirectPath } = getUserAuthInfo(auth.user);
+      navigate(redirectPath, { replace: true });
     }
-
-    if (!formData.password.trim()) {
-      newErrors.password = 'La contraseña es requerida';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
-    }
-
-    setErrors(newErrors);
-    return !newErrors.userId && !newErrors.password;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsLoading(true);
-    setErrors(prev => ({ ...prev, general: '' }));
-
-    try {
-      const response = await ApiUserService.login(formData.userId, formData.password);
-      
-      // { authenticated, user, token, message }
-      if (response.authenticated) {
-        // Login exitoso
-        alert(`¡Bienvenido ${response.user.name}!`);
-        
-        // Redirigir según el rol del usuario desde la respuesta
-        if (response.user.role === 'STUDENT') {
-          // Redirigir a dashboard de estudiante
-          navigate('/student-dashboard');
-        } else if (response.user.role === 'TUTOR') {
-          // Redirigir a dashboard de tutor
-          navigate('/tutor-dashboard');
-        } else {
-          navigate('/');
-        }
-      } else {
-        // Login fallido
-        setErrors(prev => ({ 
-          ...prev, 
-          general: response.message || 'Credenciales incorrectas'
-        }));
-      }
-    } catch (error) {
-      console.error('Error en login:', error);
-      setErrors(prev => ({ 
-        ...prev, 
-        general: error instanceof Error ? error.message : 'Error de conexión'
-      }));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [auth.isAuthenticated, auth.user, navigate]);
 
   const handleBackToHome = () => {
     navigate('/');
@@ -109,78 +32,106 @@ const LoginPage: React.FC = () => {
     navigate('/register');
   };
 
+  // Mostrar estado de carga
+  if (auth.isLoading) {
+    return (
+      <div className="login-container">
+        <div className="login-content">
+          <div className="loading-state">
+            <h2>Cargando...</h2>
+            <p>Verificando estado de autenticación...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar estado de error
+  if (auth.error) {
+    return (
+      <div className="login-container">
+        <div className="login-content">
+          <div className="error-state">
+            <h2>Error de Autenticación</h2>
+            <p>Ocurrió un error: {auth.error.message}</p>
+            <button 
+              className="btn btn-primary" 
+              onClick={() => auth.signinRedirect()}
+            >
+              Intentar de Nuevo
+            </button>
+            <button 
+              type="button" 
+              className="btn btn-secondary"
+              onClick={handleBackToHome}
+            >
+              Volver al Inicio
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar estado de autenticación (esto activará la redirección a través de useEffect)
+  if (auth.isAuthenticated) {
+    return (
+      <div className="login-container">
+        <div className="login-content">
+          <div className="authenticated-state">
+            <h2>¡Bienvenido!</h2>
+            <p>Sesión iniciada como: {auth.user?.profile?.email}</p>
+            <p>Redirigiendo...</p>
+            <div className="form-actions">
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => auth.removeUser()}
+              >
+                Cerrar Sesión
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => signOutRedirect()}
+              >
+                Cerrar Sesión (Cognito)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar formulario de inicio de sesión para usuarios no autenticados
   return (
     <div className="login-container">
       <div className="login-content">
         <div className="login-header">
           <h1 className="login-title">Iniciar Sesión</h1>
-          <p className="login-subtitle">Accede a tu cuenta de UpLearn</p>
+          <p className="login-subtitle">Accede a tu cuenta de UpLearn con AWS Cognito</p>
         </div>
 
-        <form className="login-form" onSubmit={handleSubmit}>
-          {errors.general && (
-            <div className="alert alert-error">
-              {errors.general}
+        <div className="login-form">
+          <div className="cognito-login-section">
+            <div className="form-actions">
+              <button 
+                type="button"
+                className="btn btn-primary cognito-login-btn" 
+                onClick={() => auth.signinRedirect()}
+              >
+                Iniciar Sesión con Cognito
+              </button>
+              
+              <button 
+                type="button" 
+                className="btn btn-secondary"
+                onClick={handleBackToHome}
+              >
+                Volver al Inicio
+              </button>
             </div>
-          )}
-          
-          <div className="form-group">
-            <label htmlFor="userId" className="form-label">
-              ID de Usuario
-            </label>
-            <input
-              type="text"
-              id="userId"
-              name="userId"
-              className={`form-input ${errors.userId ? 'error' : ''}`}
-              placeholder="Ingresa tu ID de usuario"
-              value={formData.userId}
-              onChange={handleInputChange}
-              disabled={isLoading}
-            />
-            {errors.userId && (
-              <span className="error-message">{errors.userId}</span>
-            )}
           </div>
-
-          <div className="form-group">
-            <label htmlFor="password" className="form-label">
-              Contraseña
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              className={`form-input ${errors.password ? 'error' : ''}`}
-              placeholder="Ingresa tu contraseña"
-              value={formData.password}
-              onChange={handleInputChange}
-              disabled={isLoading}
-            />
-            {errors.password && (
-              <span className="error-message">{errors.password}</span>
-            )}
-          </div>
-
-          <div className="form-actions">
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
-              disabled={isLoading}
-            >
-              {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-            </button>
-            
-            <button 
-              type="button" 
-              className="btn btn-secondary"
-              onClick={handleBackToHome}
-              disabled={isLoading}
-            >
-              Volver al Inicio
-            </button>
-          </div>
-        </form>
+        </div>
 
         <div className="login-footer">
           <p>¿No tienes una cuenta? <a href="#" className="link" onClick={handleGoToRegister}>Regístrate aquí</a></p>

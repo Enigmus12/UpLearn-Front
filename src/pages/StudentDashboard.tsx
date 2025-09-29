@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ApiUserService from '../service/Api-user';
+import { useAuth } from "react-oidc-context";
 import '../styles/StudentDashboard.css';
+import { getUserAuthInfo } from '../utils/tokenUtils';
+import { useCognitoIntegration } from '../utils/useCognitoIntegration';
 
 interface User {
   userId: string;
@@ -33,6 +35,11 @@ interface Task {
 
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const auth = useAuth();
+  
+  // Hook para manejar la integración con Cognito
+  const { isProcessing, processingError, isProcessed } = useCognitoIntegration();
+  
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'dashboard' | 'find-tutors' | 'my-tasks' | 'post-task'>('dashboard');
@@ -101,27 +108,55 @@ const StudentDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    // Verificar si el usuario está autenticado y es estudiante
-    const user = ApiUserService.getCurrentUser();
-    if (!user || user.role !== 'STUDENT') {
+    console.log('🎓 StudentDashboard useEffect:', { 
+      isAuthenticated: auth.isAuthenticated,
+      user: auth.user,
+      isProcessed,
+      isProcessing
+    });
+
+    // Verificar si el usuario está autenticado y es estudiante usando Cognito
+    if (!auth.isAuthenticated || !auth.user) {
+      console.log(' Not authenticated, redirecting to login');
       navigate('/login');
       return;
     }
 
-    // Obtener datos del usuario desde el token o backend
-    // Por ahora usamos datos mock
+    const { role } = getUserAuthInfo(auth.user);
+    console.log(' User role in StudentDashboard:', role);
+    
+    if (role !== 'student') {
+      console.log(' Not a student, redirecting to home');
+      navigate('/');
+      return;
+    }
+
+    // Obtener datos del usuario desde Cognito
     setCurrentUser({
-      userId: user.userId,
-      name: 'Juan Estudiante', // obtener del backend
-      email: 'juan@estudiante.com',
-      role: user.role,
-      educationLevel: 'Pregrado'
+      userId: auth.user.profile?.sub || 'unknown',
+      name: auth.user.profile?.name || auth.user.profile?.nickname || 'Usuario',
+      email: auth.user.profile?.email || 'No email',
+      role: role,
+      educationLevel: 'Pregrado' // Este valor podrías obtenerlo también del token si lo configuras en Cognito
     });
-  }, [navigate]);
+
+    // Mostrar estado de procesamiento de Cognito
+    if (processingError) {
+      console.warn(' Error procesando Cognito:', processingError);
+    }
+  }, [auth.isAuthenticated, auth.user, navigate, isProcessed, isProcessing, processingError]);
 
   const handleLogout = () => {
-    ApiUserService.logout();
+    // Logout usando Cognito
+    auth.removeUser();
     navigate('/login');
+  };
+
+  const signOutRedirect = () => {
+    const clientId = "lmk8qk12er8t8ql9phit3u12e";
+    const logoutUri = "http://localhost:3000";
+    const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
+    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
 
   const handleEditProfile = () => {
@@ -169,8 +204,32 @@ const StudentDashboard: React.FC = () => {
     }
   };
 
+  if (auth.isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        fontSize: '18px'
+      }}>
+        ⏳ Verificando acceso de estudiante...
+      </div>
+    );
+  }
+
   if (!currentUser) {
-    return <div className="loading">Cargando...</div>;
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        fontSize: '18px'
+      }}>
+        🔍 Cargando información del usuario...
+      </div>
+    );
   }
 
   return (
@@ -221,7 +280,7 @@ const StudentDashboard: React.FC = () => {
             
             {showUserMenu && (
               <div className="user-dropdown">
-                <div className="user-info">
+                  <div className="user-info">
                   <p className="user-email">{currentUser.email}</p>
                   <p className="user-role">Estudiante - {currentUser.educationLevel}</p>
                 </div>
@@ -229,8 +288,11 @@ const StudentDashboard: React.FC = () => {
                 <button className="dropdown-item" onClick={handleEditProfile}>
                   <span>✏️</span> Editar Perfil
                 </button>
-                <button className="dropdown-item logout" onClick={handleLogout}>
-                  <span>🚪</span> Cerrar Sesión
+                <button className="dropdown-item" onClick={handleLogout}>
+                  <span>🚪</span> Cerrar Sesión (Local)
+                </button>
+                <button className="dropdown-item logout" onClick={signOutRedirect}>
+                  <span>🔐</span> Cerrar Sesión (Cognito)
                 </button>
               </div>
             )}

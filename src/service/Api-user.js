@@ -23,6 +23,27 @@ class ApiUserService {
     localStorage.removeItem('uplearn_token');
   }
 
+  // ========== MÉTODOS PARA COGNITO ==========
+
+  /**
+   * Establece el token de Cognito actual para usar en las peticiones
+   * @param {string} cognitoToken - Token de Cognito
+   */
+  static setCognitoToken(cognitoToken) {
+    this.token = cognitoToken;
+    // Opcionalmente también guardarlo en localStorage para persistencia
+    localStorage.setItem('uplearn_cognito_token', cognitoToken);
+  }
+
+  /**
+   * Obtiene el token de Cognito actual
+   * @returns {string|null} Token de Cognito
+   */
+  static getCognitoToken() {
+    // Primero intentar obtener del storage local, luego del token actual
+    return localStorage.getItem('uplearn_cognito_token') || this.token;
+  }
+
   // Decodifica un JWT y retorna el payload como objeto
   static decodeToken() {
     const token = this.getToken();
@@ -107,82 +128,21 @@ class ApiUserService {
     this.clearToken();
   }
 
-  // ========== REGISTRO ==========
-
-  /**
-   * Registra un nuevo estudiante
-   * @param {Object} studentData - Datos del estudiante
-   * @returns {Promise<User>}
-   */
-  static async registerStudent(studentData) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/register-student`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...studentData,
-          role: 'STUDENT'
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Error al registrar estudiante');
-      }
-
-      return response.json();
-    } catch (error) {
-      console.error('Error registrando estudiante:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Registra un nuevo tutor
-   * @param {Object} tutorData - Datos del tutor
-   * @returns {Promise<User>}
-   */
-  static async registerTutor(tutorData) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/register-tutor`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...tutorData,
-          role: 'TUTOR'
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Error al registrar tutor');
-      }
-
-      return response.json();
-    } catch (error) {
-      console.error('Error registrando tutor:', error);
-      throw error;
-    }
-  }
-
   // ========== GESTIÓN DE USUARIOS ==========
 
   /**
-   * Obtiene los datos editables del usuario autenticado
+   * Obtiene los datos editables del usuario autenticado usando token de Cognito
+   * @param {string} cognitoToken - Token de Cognito 
    * @returns {Promise<UserUpdateDTO>}
    */
-  static async getEditableProfile() {
-    const token = this.getToken();
+  static async getEditableProfile(cognitoToken = null) {
+    const token = cognitoToken || this.getToken();
     if (!token) {
       throw new Error('No hay token de autenticación');
     }
 
     try {
-      console.log('Obteniendo datos editables del perfil');
+      console.log('Obteniendo datos editables del perfil con Cognito');
       
       const response = await fetch(`${API_BASE_URL}/editable-profile`, {
         method: 'GET',
@@ -210,18 +170,20 @@ class ApiUserService {
   }
 
   /**
-   * Actualiza el perfil del usuario autenticado
-   * @param {Object} updateData - Datos a actualizar
+   * Actualiza el perfil del usuario autenticado usando token de Cognito
+   * @param {Object} updateData - Datos a actualizar según UserUpdateDTO
+   * @param {string} cognitoToken - Token de Cognito (opcional, si no se provee se usa el almacenado)
    * @returns {Promise<User>}
    */
-  static async updateProfile(updateData) {
-    const token = this.getToken();
+  static async updateProfile(updateData, cognitoToken = null) {
+    // Usar el token de Cognito si se provee, sino usar el token almacenado
+    const token = cognitoToken || this.getToken();
     if (!token) {
       throw new Error('No hay token de autenticación');
     }
 
     try {
-      console.log('Enviando actualización de perfil:', updateData);
+      console.log('Enviando actualización de perfil con Cognito:', updateData);
       
       const response = await fetch(`${API_BASE_URL}/update-profile`, {
         method: 'PUT',
@@ -250,17 +212,19 @@ class ApiUserService {
   }
 
   /**
-   * Elimina la cuenta del usuario autenticado
+   * Elimina la cuenta del usuario autenticado usando token de Cognito
+   * @param {string} cognitoToken - Token de Cognito (opcional, si no se provee se usa el almacenado)
    * @returns {Promise<string>}
    */
-  static async deleteProfile() {
-    const token = this.getToken();
+  static async deleteProfile(cognitoToken = null) {
+    // Usar el token de Cognito si se provee, sino usar el token almacenado
+    const token = cognitoToken || this.getToken();
     if (!token) {
       throw new Error('No hay token de autenticación');
     }
 
     try {
-      console.log('Eliminando cuenta del usuario');
+      console.log('Eliminando cuenta del usuario con Cognito');
       
       const response = await fetch(`${API_BASE_URL}/delete-profile`, {
         method: 'DELETE',
@@ -340,6 +304,48 @@ class ApiUserService {
       return response.json();
     } catch (error) {
       console.error('Error obteniendo usuario:', error);
+      throw error;
+    }
+  }
+
+  // ========== INTEGRACIÓN CON COGNITO ==========
+
+  /**
+   * Procesa y registra un usuario de Cognito en el backend
+   * @param {string} cognitoToken - Token de Cognito
+   * @returns {Promise<User>}
+   */
+  static async processCognitoUser(cognitoToken) {
+    try {
+      console.log('Enviando token de Cognito al backend');
+      
+      const response = await fetch(`${API_BASE_URL}/process-cognito-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          token: cognitoToken 
+        }),
+      });
+
+      console.log('Respuesta del servidor para Cognito:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor procesando Cognito:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const user = await response.json();
+      console.log('Usuario procesado desde Cognito:', user);
+      
+      // Guardar el token de Cognito para futuras peticiones si es necesario
+      // this.setToken(cognitoToken);
+      
+      return user;
+    } catch (error) {
+      console.error('Error procesando usuario de Cognito:', error);
       throw error;
     }
   }

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from "react-oidc-context";
 import ApiUserService from '../service/Api-user';
 import '../styles/EditProfilePage.css';
+import { getUserAuthInfo } from '../utils/tokenUtils';
 
 interface User {
   userId: string;
@@ -9,7 +11,12 @@ interface User {
   email: string;
   phoneNumber: string;
   role: 'STUDENT' | 'TUTOR';
+  // Campos adicionales del perfil según UserUpdateDTO
+  idType?: string;
+  idNumber?: string;
+  // Perfil de estudiante
   educationLevel?: string;
+  // Perfil de tutor
   bio?: string;
   specializations?: string[];
   credentials?: string[];
@@ -19,7 +26,12 @@ interface UpdateData {
   name?: string;
   email?: string;
   phoneNumber?: string;
+  // Campos adicionales del perfil
+  idType?: string;
+  idNumber?: string;
+  // Perfil de estudiante
   educationLevel?: string;
+  // Perfil de tutor
   bio?: string;
   specializations?: string[];
   credentials?: string[];
@@ -27,6 +39,7 @@ interface UpdateData {
 
 const EditProfilePage: React.FC = () => {
   const navigate = useNavigate();
+  const auth = useAuth();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -35,11 +48,13 @@ const EditProfilePage: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Estados para los formularios
+  // Estados para los formularios (actualizado según UserUpdateDTO)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phoneNumber: '',
+    idType: '',
+    idNumber: '',
     educationLevel: '',
     bio: '',
     specializations: [] as string[],
@@ -52,8 +67,14 @@ const EditProfilePage: React.FC = () => {
 
   useEffect(() => {
     const loadUserProfile = async () => {
-      const user = ApiUserService.getCurrentUser();
-      if (!user) {
+      // Verificar autenticación con Cognito
+      if (!auth.isAuthenticated || !auth.user) {
+        navigate('/login');
+        return;
+      }
+
+      const { role } = getUserAuthInfo(auth.user);
+      if (!role) {
         navigate('/login');
         return;
       }
@@ -61,19 +82,21 @@ const EditProfilePage: React.FC = () => {
       setIsLoading(true);
       
       try {
-        // Obtener datos editables reales del backend
-        const editableData = await ApiUserService.getEditableProfile();
+        // Obtener datos editables reales del backend usando token de Cognito
+        const editableData = await ApiUserService.getEditableProfile(auth.user.id_token);
         console.log('Datos editables cargados:', editableData);
         
         // Crear objeto de usuario con datos del token y del backend
         const userData: User = {
-          userId: user.userId,
-          name: editableData.name,
-          email: editableData.email,
-          phoneNumber: editableData.phoneNumber,
-          role: user.role as 'STUDENT' | 'TUTOR',
-          educationLevel: editableData.educationLevel,
-          bio: editableData.bio,
+          userId: auth.user.profile?.sub || 'unknown',
+          name: editableData.name || '',
+          email: editableData.email || '',
+          phoneNumber: editableData.phoneNumber || '',
+          role: role.toUpperCase() as 'STUDENT' | 'TUTOR',
+          idType: editableData.idType || '',
+          idNumber: editableData.idNumber || '',
+          educationLevel: editableData.educationLevel || '',
+          bio: editableData.bio || '',
           specializations: editableData.specializations || [],
           credentials: editableData.credentials || []
         };
@@ -83,6 +106,8 @@ const EditProfilePage: React.FC = () => {
           name: editableData.name || '',
           email: editableData.email || '',
           phoneNumber: editableData.phoneNumber || '',
+          idType: editableData.idType || '',
+          idNumber: editableData.idNumber || '',
           educationLevel: editableData.educationLevel || '',
           bio: editableData.bio || '',
           specializations: editableData.specializations || [],
@@ -105,7 +130,7 @@ const EditProfilePage: React.FC = () => {
     };
 
     loadUserProfile();
-  }, [navigate]);
+  }, [navigate, auth.isAuthenticated, auth.user]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -195,6 +220,11 @@ const EditProfilePage: React.FC = () => {
       return;
     }
 
+    if (!auth.user?.id_token) {
+      setErrors({ general: 'No hay token de autenticación válido' });
+      return;
+    }
+
     setIsSaving(true);
     setErrors({});
     setSuccessMessage('');
@@ -203,7 +233,9 @@ const EditProfilePage: React.FC = () => {
       const updateData: UpdateData = {
         name: formData.name,
         email: formData.email,
-        phoneNumber: formData.phoneNumber
+        phoneNumber: formData.phoneNumber,
+        idType: formData.idType,
+        idNumber: formData.idNumber
       };
 
       // Agregar campos específicos según el rol
@@ -215,7 +247,7 @@ const EditProfilePage: React.FC = () => {
         updateData.credentials = formData.credentials;
       }
 
-      const updatedUser = await ApiUserService.updateProfile(updateData);
+      const updatedUser = await ApiUserService.updateProfile(updateData, auth.user.id_token);
       console.log('Usuario actualizado:', updatedUser);
       
       setSuccessMessage('¡Perfil actualizado exitosamente!');
@@ -260,17 +292,23 @@ const EditProfilePage: React.FC = () => {
   };
 
   const handleConfirmDelete = async () => {
+    if (!auth.user?.id_token) {
+      setErrors({ general: 'No hay token de autenticación válido' });
+      return;
+    }
+
     setIsDeleting(true);
     setErrors({});
 
     try {
-      const message = await ApiUserService.deleteProfile();
+      const message = await ApiUserService.deleteProfile(auth.user.id_token);
       console.log('Cuenta eliminada:', message);
       
       // Mostrar mensaje de éxito
       alert('Tu cuenta ha sido eliminada exitosamente.');
       
-      // Redirigir al home/login después de eliminar
+      // Limpiar datos de autenticación y redirigir
+      auth.removeUser();
       navigate('/');
       
     } catch (error) {
@@ -378,6 +416,39 @@ const EditProfilePage: React.FC = () => {
                 disabled={isSaving}
               />
               {errors.phoneNumber && <span className="error-message">{errors.phoneNumber}</span>}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Tipo de Identificación</label>
+              <select
+                name="idType"
+                className={`form-input ${errors.idType ? 'error' : ''}`}
+                value={formData.idType}
+                onChange={handleInputChange}
+                disabled={isSaving}
+              >
+                <option value="">Selecciona tipo de identificación</option>
+                <option value="CC">Cédula de Ciudadanía</option>
+                <option value="CE">Cédula de Extranjería</option>
+                <option value="TI">Tarjeta de Identidad</option>
+                <option value="PP">Pasaporte</option>
+                <option value="RC">Registro Civil</option>
+              </select>
+              {errors.idType && <span className="error-message">{errors.idType}</span>}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Número de Identificación</label>
+              <input
+                type="text"
+                name="idNumber"
+                className={`form-input ${errors.idNumber ? 'error' : ''}`}
+                placeholder="Número de identificación"
+                value={formData.idNumber}
+                onChange={handleInputChange}
+                disabled={isSaving}
+              />
+              {errors.idNumber && <span className="error-message">{errors.idNumber}</span>}
             </div>
           </div>
 

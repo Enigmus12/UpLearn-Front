@@ -74,6 +74,89 @@
   border: 1px solid #bbf7d0;
 }
 
+/* New state containers */
+.loading-state, .error-state, .authenticated-state {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.loading-state h2, .error-state h2, .authenticated-state h2 {
+  color: #333;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.loading-state p, .error-state p, .authenticated-state p {
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+/* Cognito login section */
+.cognito-login-section {
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
+.cognito-description {
+  color: #666;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+.cognito-login-btn {
+  background: linear-gradient(135deg, #ff9a56, #ff6a95);
+  color: white;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(255, 106, 149, 0.3);
+  transition: all 0.3s ease;
+}
+
+.cognito-login-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(255, 106, 149, 0.4);
+}
+
+/* Login info section */
+.login-info {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.login-info h4 {
+  color: #333;
+  margin-bottom: 0.8rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.login-info ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.login-info li {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  padding-left: 1rem;
+  position: relative;
+}
+
+.login-info li:before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #667eea;
+  font-weight: bold;
+}
+
 .login-form {
   display: flex;
   flex-direction: column;
@@ -219,6 +302,15 @@
   .btn {
     padding: 0.8rem 1.2rem;
     font-size: 0.95rem;
+  }
+
+  .login-info {
+    margin-top: 1rem;
+    padding: 0.8rem;
+  }
+
+  .cognito-description {
+    font-size: 0.9rem;
   }
 }
 
