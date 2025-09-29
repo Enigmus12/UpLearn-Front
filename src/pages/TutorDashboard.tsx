@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ApiUserService from '../service/Api-user';
+import { useAuth } from "react-oidc-context";
 import '../styles/TutorDashboard.css';
+import { getUserAuthInfo } from '../utils/tokenUtils';
+import { useCognitoIntegration } from '../utils/useCognitoIntegration';
 
 interface User {
   userId: string;
@@ -49,6 +51,11 @@ interface TutoringSession {
 
 const TutorDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const auth = useAuth();
+  
+  // Hook para manejar la integración con Cognito
+  const { isProcessing, processingError, isProcessed } = useCognitoIntegration();
+  
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'dashboard' | 'students' | 'requests' | 'sessions' | 'create-session'>('dashboard');
@@ -155,29 +162,57 @@ const TutorDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    // Verificar si el usuario está autenticado y es tutor
-    const user = ApiUserService.getCurrentUser();
-    if (!user || user.role !== 'TUTOR') {
+    console.log('👨‍🏫 TutorDashboard useEffect:', { 
+      isAuthenticated: auth.isAuthenticated,
+      user: auth.user,
+      isProcessed,
+      isProcessing
+    });
+
+    // Verificar si el usuario está autenticado y es tutor usando Cognito
+    if (!auth.isAuthenticated || !auth.user) {
+      console.log('❌ Not authenticated, redirecting to login');
       navigate('/login');
       return;
     }
 
-    // Obtener datos del usuario desde el token o backend
-    // usamos datos mock
+    const { role } = getUserAuthInfo(auth.user);
+    console.log('👤 User role in TutorDashboard:', role);
+    
+    if (role !== 'tutor') {
+      console.log('🚫 Not a tutor, redirecting to home');
+      navigate('/');
+      return;
+    }
+
+    // Obtener datos del usuario desde Cognito
     setCurrentUser({
-      userId: user.userId,
-      name: 'Dr. María González', // obtener del backend
-      email: 'maria@tutor.com',
-      role: user.role,
-      bio: 'Profesora de Matemáticas con 10 años de experiencia',
-      specializations: ['Matemáticas', 'Cálculo', 'Álgebra'],
-      credentials: ['PhD en Matemáticas', 'Profesora Universitaria']
+      userId: auth.user.profile?.sub || 'unknown',
+      name: auth.user.profile?.name || auth.user.profile?.nickname || 'Tutor',
+      email: auth.user.profile?.email || 'No email',
+      role: role,
+      bio: 'Tutor profesional en UpLearn', 
+      specializations: ['Matemáticas', 'Cálculo', 'Álgebra'], 
+      credentials: ['Profesional Certificado']
     });
-  }, [navigate]);
+
+    // Mostrar estado de procesamiento de Cognito
+    if (processingError) {
+      console.warn('⚠️ Error procesando Cognito:', processingError);
+    }
+  }, [auth.isAuthenticated, auth.user, navigate, isProcessed, isProcessing, processingError]);
 
   const handleLogout = () => {
-    ApiUserService.logout();
+    // Logout usando Cognito
+    auth.removeUser();
     navigate('/login');
+  };
+
+  const signOutRedirect = () => {
+    const clientId = "lmk8qk12er8t8ql9phit3u12e";
+    const logoutUri = "http://localhost:3000";
+    const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
+    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
 
   const handleEditProfile = () => {
@@ -248,8 +283,32 @@ const TutorDashboard: React.FC = () => {
     }
   };
 
+  if (auth.isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        fontSize: '18px'
+      }}>
+        ⏳ Verificando acceso de tutor...
+      </div>
+    );
+  }
+
   if (!currentUser) {
-    return <div className="loading">Cargando...</div>;
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        fontSize: '18px'
+      }}>
+        🔍 Cargando información del tutor...
+      </div>
+    );
   }
 
   return (
@@ -306,16 +365,34 @@ const TutorDashboard: React.FC = () => {
             
             {showUserMenu && (
               <div className="user-dropdown">
-                <div className="user-info">
+                  <div className="user-info">
                   <p className="user-email">{currentUser.email}</p>
                   <p className="user-role">Tutor Profesional</p>
+                  <small style={{ color: '#666', fontSize: '0.8rem' }}>
+                    Autenticado con AWS Cognito
+                  </small>
+                  {/* Indicador de sincronización con backend */}
+                  <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                    {isProcessing && (
+                      <span style={{ color: '#f59e0b' }}>🔄 Sincronizando con backend...</span>
+                    )}
+                    {isProcessed && !processingError && (
+                      <span style={{ color: '#10b981' }}>✅ Sincronizado con backend</span>
+                    )}
+                    {processingError && (
+                      <span style={{ color: '#ef4444' }}>⚠️ Error de sincronización</span>
+                    )}
+                  </div>
                 </div>
                 <div className="dropdown-divider"></div>
                 <button className="dropdown-item" onClick={handleEditProfile}>
                   <span>✏️</span> Editar Perfil
                 </button>
-                <button className="dropdown-item logout" onClick={handleLogout}>
-                  <span>🚪</span> Cerrar Sesión
+                <button className="dropdown-item" onClick={handleLogout}>
+                  <span>🚪</span> Cerrar Sesión (Local)
+                </button>
+                <button className="dropdown-item logout" onClick={signOutRedirect}>
+                  <span>🔐</span> Cerrar Sesión (Cognito)
                 </button>
               </div>
             )}
