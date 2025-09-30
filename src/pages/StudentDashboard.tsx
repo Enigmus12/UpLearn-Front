@@ -4,6 +4,7 @@ import { useAuth } from "react-oidc-context";
 import '../styles/StudentDashboard.css';
 import { getUserAuthInfo } from '../utils/tokenUtils';
 import { useCognitoIntegration } from '../utils/useCognitoIntegration';
+import ApiSearchService from '../service/Api-search';
 
 interface User {
   userId: string;
@@ -43,40 +44,30 @@ const StudentDashboard: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'dashboard' | 'find-tutors' | 'my-tasks' | 'post-task'>('dashboard');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState('');
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const subjects = ['Matemáticas', 'Física', 'Química', 'Programación', 'Inglés', 'Historia', 'Biología'];
+
+  const [search, setSearch] = useState<string>('');
+  const [tutors, setTutors] = useState<any[]>([]);
+  const [loadingSearch, setLoadingSearch] = useState<boolean>(false);
+  const [errorSearch, setErrorSearch] = useState<string>('');
 
   // esto vendrá del backend
-  const [tutors] = useState<Tutor[]>([
-    {
-      userId: 'tutor1',
-      name: 'Dr. María González',
-      bio: 'Profesora de Matemáticas con 10 años de experiencia',
-      specializations: ['Matemáticas', 'Cálculo', 'Álgebra'],
-      credentials: ['PhD en Matemáticas', 'Profesora Universitaria'],
-      rating: 4.8,
-      hourlyRate: 25000
-    },
-    {
-      userId: 'tutor2', 
-      name: 'Prof. Carlos Rodríguez',
-      bio: 'Experto en programación y desarrollo de software',
-      specializations: ['Programación', 'JavaScript', 'Python'],
-      credentials: ['Ingeniero de Software', 'Certificación AWS'],
-      rating: 4.9,
-      hourlyRate: 30000
-    },
-    {
-      userId: 'tutor3',
-      name: 'Dra. Ana Martínez',
-      bio: 'Especialista en ciencias naturales y química',
-      specializations: ['Química', 'Física', 'Biología'],
-      credentials: ['PhD en Química', 'Investigadora'],
-      rating: 4.7,
-      hourlyRate: 28000
+  
+  const handleSearchTutors = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoadingSearch(true);
+    setErrorSearch('');
+    try {
+      // Antes: const result = await ApiUserService.searchTutors(search);
+      const result = await ApiSearchService.searchTutors(search);
+      setTutors(result || []);
+    } catch (err: any) {
+      setErrorSearch(err?.message || 'Error realizando la búsqueda');
+    } finally {
+      setLoadingSearch(false);
     }
-  ]);
+  };
 
   const [tasks, setTasks] = useState<Task[]>([
     {
@@ -162,15 +153,6 @@ const StudentDashboard: React.FC = () => {
   const handleEditProfile = () => {
     navigate('/edit-profile');
   };
-
-  const filteredTutors = tutors.filter(tutor => {
-    const matchesSearch = tutor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         tutor.specializations.some(spec => spec.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesSubject = selectedSubject === '' || tutor.specializations.includes(selectedSubject);
-    return matchesSearch && matchesSubject;
-  });
-
-  const subjects = ['Matemáticas', 'Física', 'Química', 'Programación', 'Inglés', 'Historia', 'Biología'];
 
   const handlePostTask = () => {
     if (newTask.title && newTask.description && newTask.subject) {
@@ -365,63 +347,58 @@ const StudentDashboard: React.FC = () => {
 
         {/* Find Tutors Section */}
         {activeSection === 'find-tutors' && (
-          <div className="tutors-section">
-            <h1>Buscar Tutores 🔍</h1>
-            
-            <div className="search-filters">
-              <div className="search-bar">
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre o especialización..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="search-input"
-                />
-              </div>
-              
-              <select
-                value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
-                className="subject-filter"
-              >
-                <option value="">Todas las materias</option>
-                {subjects.map(subject => (
-                  <option key={subject} value={subject}>{subject}</option>
-                ))}
-              </select>
-            </div>
+        <div className="tutors-section">
+          <h1>Buscar Tutores 🔍</h1>
 
-            <div className="tutors-grid">
-              {filteredTutors.map(tutor => (
-                <div key={tutor.userId} className="tutor-card">
-                  <div className="tutor-header">
-                    <div className="tutor-avatar">👨‍🏫</div>
-                    <div className="tutor-info">
-                      <h3>{tutor.name}</h3>
-                      <div className="rating">
-                        <span>⭐ {tutor.rating}</span>
-                        <span className="hourly-rate">${tutor.hourlyRate?.toLocaleString()}/hora</span>
-                      </div>
+          <section className="tutor-search">
+            <h2>Buscar tutores</h2>
+            <form onSubmit={handleSearchTutors} className="tutor-search-form">
+              <input
+                type="text"
+                placeholder="Ej: java, curso java con spring, María..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <button type="submit" disabled={loadingSearch}>
+                {loadingSearch ? 'Buscando...' : 'Buscar'}
+              </button>
+            </form>
+
+            {errorSearch && <p className="error">{errorSearch}</p>}
+
+            <div className="tutor-results">
+              {tutors.length === 0 && !loadingSearch && (
+                <p>No hay resultados aún. Prueba con “java”.</p>
+              )}
+
+              {tutors.map((tutor: any) => (
+                <div key={tutor.sub || tutor.userId || tutor.email} className="tutor-card">
+                  <div className="tutor-card-header">
+                    <div className="tutor-title">
+                      <strong className="tutor-name">{tutor.name || 'Tutor'}</strong>
+                      <br></br>
+                      <span className="tutor-email">{tutor.email}</span>
                     </div>
                   </div>
-                  
-                  <p className="tutor-bio">{tutor.bio}</p>
-                  
-                  <div className="specializations">
-                    {tutor.specializations.map(spec => (
-                      <span key={spec} className="specialization-tag">{spec}</span>
-                    ))}
-                  </div>
-                  
-                  <div className="tutor-actions">
-                    <button className="btn-primary">Contactar</button>
-                    <button className="btn-secondary">Ver Perfil</button>
-                  </div>
+
+                  {tutor.bio && <p className="tutor-bio">{tutor.bio}</p>}
+
+                  {Array.isArray(tutor.specializations) && tutor.specializations.length > 0 && (
+                    <div className="tutor-tags">
+                      {tutor.specializations.map((s: string, idx: number) => (
+                        <span key={idx} className="tag">{s}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
+
             </div>
-          </div>
-        )}
+          </section>
+        </div>
+      )}
+
+
 
         {/* My Tasks Section */}
         {activeSection === 'my-tasks' && (
