@@ -9,6 +9,7 @@ import StudentDashboard from './pages/StudentDashboard';
 import TutorDashboard from './pages/TutorDashboard';
 import EditProfilePage from './pages/EditProfilePage';
 import { getUserAuthInfo } from './utils/tokenUtils';
+import ReservationPage from './pages/ReservationPage';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ 
@@ -179,6 +180,7 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } 
           />
+          <Route path="/reservar/:tutorId" element={<ReservationPage />} /> 
         </Routes>
       </div>
     </Router>

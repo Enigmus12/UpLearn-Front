@@ -15,7 +15,11 @@ interface User {
 }
 
 interface Tutor {
-  userId: string;
+  userId?: string;
+  sub?: string;
+  id?: string;
+  _id?: string;
+  email?: string;
   name: string;
   bio: string;
   specializations: string[];
@@ -23,6 +27,7 @@ interface Tutor {
   rating?: number;
   hourlyRate?: number;
 }
+
 
 interface Task {
   id: string;
@@ -61,7 +66,12 @@ const StudentDashboard: React.FC = () => {
     try {
       // Antes: const result = await ApiUserService.searchTutors(search);
       const result = await ApiSearchService.searchTutors(search);
-      setTutors(result || []);
+      const normalized = (result || []).map((t: any) => ({
+        ...t,
+        userId: t.userId ?? t.sub ?? t.id ?? t._id ?? null,
+      }));
+
+      setTutors(normalized);
     } catch (err: any) {
       setErrorSearch(err?.message || 'Error realizando la búsqueda');
     } finally {
@@ -371,12 +381,19 @@ const StudentDashboard: React.FC = () => {
                 <p>No hay resultados aún. Prueba con “java”.</p>
               )}
 
-              {tutors.map((tutor: any) => (
-                <div key={tutor.sub || tutor.userId || tutor.email} className="tutor-card">
+              {tutors.map((tutor: any, idx: number) => {
+              // Tomamos el ID normalizado (o intentamos otros por si acaso)
+              const id = tutor.userId ?? tutor.sub ?? tutor.id ?? tutor._id ?? null;
+
+              // Key estable: prioriza id/email/name y, como último recurso, idx
+              const key = id ?? tutor.email ?? tutor.name ?? idx;
+
+              return (
+                <div key={key} className="tutor-card">
                   <div className="tutor-card-header">
                     <div className="tutor-title">
                       <strong className="tutor-name">{tutor.name || 'Tutor'}</strong>
-                      <br></br>
+                      <br />
                       <span className="tutor-email">{tutor.email}</span>
                     </div>
                   </div>
@@ -385,14 +402,23 @@ const StudentDashboard: React.FC = () => {
 
                   {Array.isArray(tutor.specializations) && tutor.specializations.length > 0 && (
                     <div className="tutor-tags">
-                      {tutor.specializations.map((s: string, idx: number) => (
-                        <span key={idx} className="tag">{s}</span>
+                      {tutor.specializations.map((s: string, i: number) => (
+                        <span key={`${key}-spec-${i}`} tabIndex={0} className="tag">{s}</span>
                       ))}
                     </div>
                   )}
-                </div>
-              ))}
+                  <br />
 
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => id ? navigate(`/reservar/${id}`) : alert('Este tutor no tiene un ID válido para reservar.')}
+                    disabled={!id}
+                  >
+                    Reservar
+                  </button>
+                </div>
+              );
+            })}
             </div>
           </section>
         </div>

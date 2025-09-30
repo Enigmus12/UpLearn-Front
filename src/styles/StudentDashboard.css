@@ -498,7 +498,7 @@
 .dashboard-container .tutor-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 24px rgba(17, 24, 39, 0.10);
-  border-color: #e5e7eb;
+  border-color: #33518f;
 }
 
 /* Encabezado de la tarjeta */
@@ -847,4 +847,5 @@
   .nav-item span {
     display: none;
   }
+  
 }
