@@ -393,137 +393,168 @@
   font-size: 0.85rem;
 }
 
-/* Tutors Section */
-.dashboard-container .tutors-section h1,
-.dashboard-container .tasks-section h1,
-.dashboard-container .post-task-section h1 {
-  color: #1f2937 !important;
-  margin-bottom: 2rem;
-  font-size: 2rem;
+/* Buscar tutores  */
+/* Contenedor principal de la sección */
+.dashboard-container .tutors-section .tutor-search {
+  max-width: 760px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 8px 28px rgba(17, 24, 39, 0.08);
 }
 
-.search-filters {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
+/* Título */
+.dashboard-container .tutors-section .tutor-search h2 {
+  display: none !important;
 }
 
-.dashboard-container .search-input,
-.dashboard-container .subject-filter {
-  padding: 0.75rem 1rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  transition: border-color 0.3s ease;
-  color: #1f2937 !important;
-  background: white !important;
-}
-
-.search-input {
-  flex: 1;
-  min-width: 300px;
-}
-
-.search-input:focus,
-.subject-filter:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.subject-filter {
-  min-width: 200px;
-}
-
-/* Tutors Grid */
-.tutors-grid {
+/* Formulario de búsqueda */
+.dashboard-container .tutor-search-form {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: 1fr auto;
+  gap: .75rem;
+  margin-bottom: 1rem;
+  justify-content: start;
 }
 
-.tutor-card {
-  background: white;
+.dashboard-container .tutor-search-form input[type="text"] {
+  height: 46px;
+  padding: 0 1rem;
+  border: 2px solid #e5e7eb;
   border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: #fff;
+  font-size: .95rem;
+  color: #111827 !important;
+  transition: border-color .2s ease, box-shadow .2s ease;
 }
 
-.tutor-card:hover {
+.dashboard-container .tutor-search-form input[type="text"]::placeholder {
+  color: #9ca3af;
+}
+
+.dashboard-container .tutor-search-form input[type="text"]:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, .15);
+}
+
+.dashboard-container .tutor-search-form button[type="submit"] {
+  height: 46px;
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: .95rem;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  color: #fff !important;
+  transition: transform .08s ease, box-shadow .2s ease, opacity .2s ease;
+  box-shadow: 0 8px 20px rgba(99, 102, 241, .35);
+}
+.dashboard-container .tutor-search-form button[type="submit"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(124, 58, 237, .35);
+}
+.dashboard-container .tutor-search-form button[type="submit"]:disabled {
+  opacity: .7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Mensajes de error / vacío */
+.dashboard-container .tutor-search .error {
+  margin: .25rem 0 0 0;
+  color: #b91c1c !important;
+  font-size: .9rem;
+}
+.dashboard-container .tutor-results > p {
+  margin: .5rem 0 0 0;
+  color: #6b7280 !important;
+  font-style: italic;
+  justify-items: start;
+}
+
+/* Resultados */
+.dashboard-container .tutor-results {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  justify-items: center;
+
+}
+
+/* Tarjeta de tutor */
+.dashboard-container .tutor-card {
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.06);
+  transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.dashboard-container .tutor-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.10);
+  border-color: #e5e7eb;
 }
 
-.tutor-header {
+/* Encabezado de la tarjeta */
+.dashboard-container .tutor-card-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .25rem;
+}
+.dashboard-container .tutor-title { line-height: 1.2; }
+.dashboard-container .tutor-name {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #111827 !important;
+}
+.dashboard-container .tutor-email {
+  display: block;
+  margin-top: .15rem;
+  font-size: .9rem;
+  color: #6b7280 !important;
+  word-break: break-all;
 }
 
-.tutor-avatar {
-  font-size: 2rem;
-  width: 60px;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 50%;
-}
-
-.tutor-info h3 {
-  margin: 0;
-  color: #1f2937;
-  font-size: 1.1rem;
-}
-
-.rating {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 0.25rem;
-}
-
-.rating span:first-child {
-  color: #f59e0b;
-  font-weight: 500;
-}
-
-.hourly-rate {
-  color: #059669;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.tutor-bio {
-  color: #6b7280;
-  margin-bottom: 1rem;
+/* Bio */
+.dashboard-container .tutor-bio {
+  margin: .5rem 0 .75rem 0;
+  color: #4b5563 !important;
   line-height: 1.5;
+  font-size: .95rem;
 }
 
-.specializations {
+/* Tags de especialización */
+.dashboard-container .tutor-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: .5rem;
+}
+.dashboard-container .tutor-tags .tag {
+  background: #eef2ff;
+  color: #3730a3 !important;
+  border: 1px solid #e0e7ff;
+  padding: .25rem .6rem;
+  border-radius: 999px;
+  font-size: .8rem;
+  font-weight: 600;
 }
 
-.specialization-tag {
-  background: #e0e7ff;
-  color: #3730a3;
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 500;
+/* Responsive */
+@media (max-width: 640px) {
+  .dashboard-container .tutor-search { padding: 1.25rem; }
+  .dashboard-container .tutor-search-form { grid-template-columns: 1fr; }
+  .dashboard-container .tutor-search-form button[type="submit"] { width: 100%; }
 }
 
-.tutor-actions {
-  display: flex;
-  gap: 0.75rem;
-}
 
 /* Tasks Grid */
 .dashboard-container .tasks-grid {
