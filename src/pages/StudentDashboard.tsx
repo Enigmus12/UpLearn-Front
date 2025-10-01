@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import '../styles/StudentDashboard.css';
-import { getUserAuthInfo } from '../utils/tokenUtils';
-import { useCognitoIntegration } from '../utils/useCognitoIntegration';
+import { useAuthFlow } from '../utils/useAuthFlow';
+// import { useCognitoIntegration } from '../utils/useCognitoIntegration'; // COMENTADO: Ya no necesario
 import ApiSearchService from '../service/Api-search';
+import DashboardSwitchButton from '../components/DashboardSwitchButton';
+import AddRoleButton from '../components/AddRoleButton';
 
 interface User {
   userId: string;
@@ -37,9 +39,10 @@ interface Task {
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { userRoles, isAuthenticated } = useAuthFlow();
   
-  // Hook para manejar la integración con Cognito
-  const { isProcessing, processingError, isProcessed } = useCognitoIntegration();
+  // COMENTADO: Hook para manejar la integración con Cognito (ya no necesario con useAuthFlow)
+  // const { isProcessing, processingError, isProcessed } = useCognitoIntegration();
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -99,43 +102,32 @@ const StudentDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    console.log('🎓 StudentDashboard useEffect:', { 
-      isAuthenticated: auth.isAuthenticated,
-      user: auth.user,
-      isProcessed,
-      isProcessing
-    });
+    // Solo proceder si tenemos información completa del usuario
+    if (isAuthenticated === null || userRoles === null) {
+      return;
+    }
 
     // Verificar si el usuario está autenticado y es estudiante usando Cognito
-    if (!auth.isAuthenticated || !auth.user) {
-      console.log(' Not authenticated, redirecting to login');
+    if (!isAuthenticated) {
       navigate('/login');
       return;
     }
 
-    const { role } = getUserAuthInfo(auth.user);
-    console.log(' User role in StudentDashboard:', role);
-    
-    if (role !== 'student') {
-      console.log(' Not a student, redirecting to home');
+    if (!userRoles || !userRoles.includes('student')) {
       navigate('/');
       return;
     }
 
     // Obtener datos del usuario desde Cognito
-    setCurrentUser({
-      userId: auth.user.profile?.sub || 'unknown',
-      name: auth.user.profile?.name || auth.user.profile?.nickname || 'Usuario',
-      email: auth.user.profile?.email || 'No email',
-      role: role,
-      educationLevel: 'Pregrado' // Este valor podrías obtenerlo también del token si lo configuras en Cognito
-    });
-
-    // Mostrar estado de procesamiento de Cognito
-    if (processingError) {
-      console.warn(' Error procesando Cognito:', processingError);
+    if (auth.user) {
+      setCurrentUser({
+        userId: auth.user.profile?.sub || 'unknown',
+        name: auth.user.profile?.name || auth.user.profile?.nickname || 'Usuario',
+        email: auth.user.profile?.email || 'No email',
+        role: 'student'
+      });
     }
-  }, [auth.isAuthenticated, auth.user, navigate, isProcessed, isProcessing, processingError]);
+  }, [isAuthenticated, userRoles, navigate, auth.user]);
 
   const handleLogout = () => {
     // Logout usando Cognito
@@ -151,7 +143,7 @@ const StudentDashboard: React.FC = () => {
   };
 
   const handleEditProfile = () => {
-    navigate('/edit-profile');
+    navigate('/edit-profile', { state: { currentRole: 'student' } });
   };
 
   const handlePostTask = () => {
@@ -250,7 +242,11 @@ const StudentDashboard: React.FC = () => {
             </button>
           </nav>
 
-          <div className="user-menu-container">
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <DashboardSwitchButton currentRole="student" />
+            <AddRoleButton currentRole="student" />
+            
+            <div className="user-menu-container">
             <button 
               className="user-avatar"
               onClick={() => setShowUserMenu(!showUserMenu)}
@@ -278,6 +274,7 @@ const StudentDashboard: React.FC = () => {
                 </button>
               </div>
             )}
+            </div>
           </div>
         </div>
       </header>

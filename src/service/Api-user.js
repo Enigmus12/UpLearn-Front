@@ -62,8 +62,6 @@ class ApiUserService {
   static getCurrentUser() {
     const decoded = this.decodeToken();
     if (!decoded) return null;
-    
-    console.log('Token decodificado:', decoded);
 
     // nosotros en el backend usamos 'sub' para userId y 'role' para el rol
     return decoded ? {
@@ -82,8 +80,6 @@ class ApiUserService {
    */
   static async login(userId, password) {
     try {
-      console.log('Enviando petición de login:', { userId, password });
-      
       const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
         headers: {
@@ -95,8 +91,6 @@ class ApiUserService {
         }),
       });
 
-      console.log('Respuesta del servidor:', response.status, response.statusText);
-
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Error del servidor:', errorText);
@@ -104,14 +98,10 @@ class ApiUserService {
       }
 
       const data = await response.json();
-      console.log('Datos recibidos del servidor:', data);
       
       // Si la autenticación es exitosa, guardar el token
-      // Actualizar para usar la estructura real de respuesta
       if (data.authenticated && data.token) {
-        console.log('Login exitoso, guardando token:', data.token);
         this.setToken(data.token);
-        console.log('Token guardado correctamente');
       }
       
       return data;
@@ -128,23 +118,22 @@ class ApiUserService {
     this.clearToken();
   }
 
-  // ========== GESTIÓN DE USUARIOS ==========
+  // ========== ENDPOINTS ESPECÍFICOS PARA ESTUDIANTE ==========
 
   /**
-   * Obtiene los datos editables del usuario autenticado usando token de Cognito
-   * @param {string} cognitoToken - Token de Cognito 
-   * @returns {Promise<UserUpdateDTO>}
+   * Obtiene el perfil específico de estudiante
+   * Solo funciona si el usuario tiene rol STUDENT
+   * @param {string} cognitoToken - Token de Cognito
+   * @returns {Promise<StudentProfileDTO>}
    */
-  static async getEditableProfile(cognitoToken = null) {
+  static async getStudentProfile(cognitoToken = null) {
     const token = cognitoToken || this.getToken();
     if (!token) {
       throw new Error('No hay token de autenticación');
     }
 
     try {
-      console.log('Obteniendo datos editables del perfil con Cognito');
-      
-      const response = await fetch(`${API_BASE_URL}/editable-profile`, {
+      const response = await fetch(`${API_BASE_URL}/student/profile`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -152,8 +141,6 @@ class ApiUserService {
         },
       });
 
-      console.log('Respuesta del servidor:', response.status, response.statusText);
-
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Error del servidor:', errorText);
@@ -161,40 +148,35 @@ class ApiUserService {
       }
 
       const data = await response.json();
-      console.log('Datos editables obtenidos:', data);
       return data;
     } catch (error) {
-      console.error('Error obteniendo datos editables:', error);
+      console.error('Error obteniendo perfil de estudiante:', error);
       throw error;
     }
   }
 
   /**
-   * Actualiza el perfil del usuario autenticado usando token de Cognito
-   * @param {Object} updateData - Datos a actualizar según UserUpdateDTO
-   * @param {string} cognitoToken - Token de Cognito (opcional, si no se provee se usa el almacenado)
-   * @returns {Promise<User>}
+   * Actualiza el perfil específico de estudiante
+   * Solo permite editar campos relacionados con el rol de estudiante
+   * @param {Object} studentData - Datos del estudiante según StudentProfileDTO
+   * @param {string} cognitoToken - Token de Cognito
+   * @returns {Promise<StudentProfileDTO>}
    */
-  static async updateProfile(updateData, cognitoToken = null) {
-    // Usar el token de Cognito si se provee, sino usar el token almacenado
+  static async updateStudentProfile(studentData, cognitoToken = null) {
     const token = cognitoToken || this.getToken();
     if (!token) {
       throw new Error('No hay token de autenticación');
     }
 
     try {
-      console.log('Enviando actualización de perfil con Cognito:', updateData);
-      
-      const response = await fetch(`${API_BASE_URL}/update-profile`, {
+      const response = await fetch(`${API_BASE_URL}/student/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(updateData),
+        body: JSON.stringify(studentData),
       });
-
-      console.log('Respuesta del servidor:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -203,30 +185,27 @@ class ApiUserService {
       }
 
       const data = await response.json();
-      console.log('Perfil actualizado:', data);
       return data;
     } catch (error) {
-      console.error('Error actualizando perfil:', error);
+      console.error('Error actualizando perfil de estudiante:', error);
       throw error;
     }
   }
 
   /**
-   * Elimina la cuenta del usuario autenticado usando token de Cognito
-   * @param {string} cognitoToken - Token de Cognito (opcional, si no se provee se usa el almacenado)
-   * @returns {Promise<string>}
+   * Elimina el rol de estudiante del usuario
+   * Si es el único rol, elimina completamente el usuario
+   * @param {string} cognitoToken - Token de Cognito
+   * @returns {Promise<Object>}
    */
-  static async deleteProfile(cognitoToken = null) {
-    // Usar el token de Cognito si se provee, sino usar el token almacenado
+  static async removeStudentRole(cognitoToken = null) {
     const token = cognitoToken || this.getToken();
     if (!token) {
       throw new Error('No hay token de autenticación');
     }
 
     try {
-      console.log('Eliminando cuenta del usuario con Cognito');
-      
-      const response = await fetch(`${API_BASE_URL}/delete-profile`, {
+      const response = await fetch(`${API_BASE_URL}/student/profile`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -234,7 +213,48 @@ class ApiUserService {
         },
       });
 
-      console.log('Respuesta del servidor:', response.status, response.statusText);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Si se eliminó completamente el usuario, limpiar token
+      if (data.userDeleted) {
+        this.clearToken();
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error eliminando rol de estudiante:', error);
+      throw error;
+    }
+  }
+
+  // ========== ENDPOINTS ESPECÍFICOS PARA TUTOR ==========
+
+  /**
+   * Obtiene el perfil específico de tutor
+   * Solo funciona si el usuario tiene rol TUTOR
+   * @param {string} cognitoToken - Token de Cognito
+   * @returns {Promise<TutorProfileDTO>}
+   */
+  static async getTutorProfile(cognitoToken = null) {
+    const token = cognitoToken || this.getToken();
+    if (!token) {
+      throw new Error('No hay token de autenticación');
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/tutor/profile`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -242,15 +262,88 @@ class ApiUserService {
         throw new Error(errorText || `HTTP error! status: ${response.status}`);
       }
 
-      const message = await response.text();
-      console.log('Cuenta eliminada:', message);
-      
-      // Limpiar token después de eliminar cuenta
-      this.clearToken();
-      
-      return message;
+      const data = await response.json();
+      return data;
     } catch (error) {
-      console.error('Error eliminando cuenta:', error);
+      console.error('Error obteniendo perfil de tutor:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualiza el perfil específico de tutor
+   * Solo permite editar campos relacionados con el rol de tutor
+   * @param {Object} tutorData - Datos del tutor según TutorProfileDTO
+   * @param {string} cognitoToken - Token de Cognito
+   * @returns {Promise<TutorProfileDTO>}
+   */
+  static async updateTutorProfile(tutorData, cognitoToken = null) {
+    const token = cognitoToken || this.getToken();
+    if (!token) {
+      throw new Error('No hay token de autenticación');
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/tutor/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(tutorData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error actualizando perfil de tutor:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Elimina el rol de tutor del usuario
+   * Si es el único rol, elimina completamente el usuario
+   * @param {string} cognitoToken - Token de Cognito
+   * @returns {Promise<Object>}
+   */
+  static async removeTutorRole(cognitoToken = null) {
+    const token = cognitoToken || this.getToken();
+    if (!token) {
+      throw new Error('No hay token de autenticación');
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/tutor/profile`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Si se eliminó completamente el usuario, limpiar token
+      if (data.userDeleted) {
+        this.clearToken();
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error eliminando rol de tutor:', error);
       throw error;
     }
   }
@@ -313,12 +406,10 @@ class ApiUserService {
   /**
    * Procesa y registra un usuario de Cognito en el backend
    * @param {string} cognitoToken - Token de Cognito
-   * @returns {Promise<User>}
+   * @returns {Promise<{user: User, isNewUser: boolean}>}
    */
   static async processCognitoUser(cognitoToken) {
     try {
-      console.log('Enviando token de Cognito al backend');
-      
       const response = await fetch(`${API_BASE_URL}/process-cognito-user`, {
         method: 'POST',
         headers: {
@@ -329,23 +420,120 @@ class ApiUserService {
         }),
       });
 
-      console.log('Respuesta del servidor para Cognito:', response.status, response.statusText);
-
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Error del servidor procesando Cognito:', errorText);
         throw new Error(errorText || `HTTP error! status: ${response.status}`);
       }
 
-      const user = await response.json();
-      console.log('Usuario procesado desde Cognito:', user);
+      const data = await response.json();
       
-      // Guardar el token de Cognito para futuras peticiones si es necesario
-      // this.setToken(cognitoToken);
+      return data;
+    } catch (error) {
+      console.error('Error procesando usuario de Cognito:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Guarda los roles de un usuario en el backend
+   * @param {string} cognitoToken - Token de Cognito
+   * @param {string|string[]} roles - Rol(es) a asignar ('student', 'tutor', o ambos)
+   * @returns {Promise<User>}
+   */
+  static async saveUserRole(cognitoToken, roles) {
+    try {
+      // Convertir a array si es un string único
+      const roleArray = Array.isArray(roles) ? roles : [roles];
+      
+      const response = await fetch(`${API_BASE_URL}/save-user-role`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cognitoToken}`,
+        },
+        body: JSON.stringify({ 
+          roles: roleArray 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor guardando roles:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const user = await response.json();
       
       return user;
     } catch (error) {
-      console.error('Error procesando usuario de Cognito:', error);
+      console.error('Error guardando roles de usuario:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene los roles actuales del usuario autenticado
+   * @param {string} cognitoToken - Token de Cognito
+   * @returns {Promise<Object>} Información completa de roles del usuario
+   */
+  static async getMyRoles(cognitoToken) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/my-roles`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cognitoToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor obteniendo roles:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo roles del usuario:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Añade un rol adicional al usuario autenticado
+   * @param {string} cognitoToken - Token de Cognito
+   * @param {string} userId - ID del usuario
+   * @param {string} newRole - Nuevo rol a añadir ('student' o 'tutor')
+   * @returns {Promise<Object>} Información actualizada del usuario
+   */
+  static async addRoleToUser(cognitoToken, userId, newRole) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/add-role`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cognitoToken}`,
+        },
+        body: JSON.stringify({
+          userId: userId,
+          role: newRole
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor añadiendo rol:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      return data;
+    } catch (error) {
+      console.error('Error añadiendo rol al usuario:', error);
       throw error;
     }
   }
