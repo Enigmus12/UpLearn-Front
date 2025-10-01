@@ -8,23 +8,27 @@ import RegisterPage from './pages/RegisterPage';
 import StudentDashboard from './pages/StudentDashboard';
 import TutorDashboard from './pages/TutorDashboard';
 import EditProfilePage from './pages/EditProfilePage';
-import { getUserAuthInfo } from './utils/tokenUtils';
+import RoleSelectionPage from './pages/RoleSelectionPage';
+import { useAuthFlow } from './utils/useAuthFlow';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ 
   children, 
   allowedRoles 
 }) => {
-  const auth = useAuth();
+  const { isLoading, isAuthenticated, userRoles, needsRoleSelection } = useAuthFlow();
   
   console.log('🛡️ ProtectedRoute check:', { 
-    isAuthenticated: auth.isAuthenticated,
-    isLoading: auth.isLoading,
+    isAuthenticated,
+    isLoading,
     allowedRoles,
-    hasUser: !!auth.user
+    userRoles,
+    needsRoleSelection
   });
   
-  if (auth.isLoading) {
+  // Mientras se carga, mostrar indicador
+  if (isLoading) {
+    console.log('⏳ ProtectedRoute: Cargando...');
     return (
       <div style={{ 
         display: 'flex', 
@@ -38,48 +42,77 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
     );
   }
 
-  if (!auth.isAuthenticated) {
-    console.log(' Not authenticated, redirecting to login');
+  // No autenticado - redirigir a login
+  if (!isAuthenticated) {
+    console.log('🔒 ProtectedRoute: Not authenticated, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
+  // Necesita selección de roles - redirigir a role selection
+  if (needsRoleSelection) {
+    console.log('🔄 ProtectedRoute: User needs role selection, redirecting');
+    return <Navigate to="/role-selection" replace />;
+  }
+
+  // Verificar roles específicos si se especificaron
   if (allowedRoles && allowedRoles.length > 0) {
-    const { role } = getUserAuthInfo(auth.user);
-    console.log(' User role:', role, 'Allowed roles:', allowedRoles);
+    console.log('🎭 ProtectedRoute: User roles:', userRoles, 'Allowed roles:', allowedRoles);
     
-    if (!role || !allowedRoles.includes(role)) {
-      console.log(' Role not allowed, redirecting to home');
+    if (!userRoles || !userRoles.some(role => allowedRoles.includes(role))) {
+      console.log('❌ ProtectedRoute: Role not allowed, redirecting to home');
       return <Navigate to="/" replace />;
     }
   }
 
-  console.log(' Access granted');
+  console.log('✅ ProtectedRoute: Access granted');
   return <>{children}</>;
 };
 
 // Auth Redirect Component
 const AuthRedirect: React.FC = () => {
   const auth = useAuth();
+  const { isLoading, isAuthenticated, needsRoleSelection, userRoles, error } = useAuthFlow();
   const navigate = useNavigate();
 
   useEffect(() => {
-    console.log(' AuthRedirect useEffect:', { 
-      isAuthenticated: auth.isAuthenticated, 
-      isLoading: auth.isLoading,
-      hasUser: !!auth.user 
+    console.log('📍 AuthRedirect useEffect:', { 
+      isAuthenticated, 
+      isLoading,
+      needsRoleSelection,
+      userRoles,
+      error
     });
 
-    if (auth.isAuthenticated && auth.user && !auth.isLoading) {
-      const { redirectPath } = getUserAuthInfo(auth.user);
-      console.log(' Redirecting to:', redirectPath);
-      
-      setTimeout(() => {
-        navigate(redirectPath, { replace: true });
-      }, 100);
+    // Esperar a que termine de cargar
+    if (isLoading) {
+      console.log('⏳ AuthRedirect: Esperando que termine de cargar...');
+      return;
     }
-  }, [auth.isAuthenticated, auth.user, auth.isLoading, navigate]);
 
-  if (auth.isLoading) {
+    // No hacer nada si no está autenticado (mostrará LoginPage abajo)
+    if (!isAuthenticated) {
+      console.log('🔒 AuthRedirect: No autenticado, mostrando login');
+      return;
+    }
+
+    // Redirigir según el estado
+    if (needsRoleSelection) {
+      console.log('🎭 AuthRedirect: Redirigiendo a selección de rol');
+      navigate('/role-selection', { replace: true });
+      return;
+    }
+    
+    if (userRoles && userRoles.length > 0) {
+      const redirectPath = userRoles.includes('student') ? '/student-dashboard' : '/tutor-dashboard';
+      console.log('📊 AuthRedirect: Redirigiendo a:', redirectPath);
+      navigate(redirectPath, { replace: true });
+      return;
+    }
+
+    console.log('🤔 AuthRedirect: Estado inesperado, no redirigiendo');
+  }, [isAuthenticated, isLoading, needsRoleSelection, userRoles, navigate]);
+
+  if (auth.isLoading || isLoading) {
     return (
       <div style={{ 
         display: 'flex', 
@@ -93,7 +126,7 @@ const AuthRedirect: React.FC = () => {
     );
   }
 
-  if (auth.error) {
+  if (auth.error || error) {
     return (
       <div style={{ 
         display: 'flex', 
@@ -103,7 +136,7 @@ const AuthRedirect: React.FC = () => {
         height: '100vh',
         gap: '20px'
       }}>
-        <div> Error de autenticación: {auth.error.message}</div>
+        <div>❌ Error de autenticación: {auth.error?.message || error}</div>
         <button onClick={() => auth.signinRedirect()}>
           Intentar nuevamente
         </button>
@@ -111,11 +144,11 @@ const AuthRedirect: React.FC = () => {
     );
   }
 
-  if (!auth.isAuthenticated) {
+  if (!isAuthenticated) {
     return <LoginPage />;
   }
 
-  // Show while redirecting
+  // Estado mientras se está redirigiendo
   return (
     <div style={{ 
       display: 'flex', 
@@ -125,26 +158,52 @@ const AuthRedirect: React.FC = () => {
       height: '100vh',
       gap: '20px'
     }}>
-      <div> ¡Autenticación exitosa!</div>
-      <div> Redirigiendo al dashboard...</div>
-      <button 
-        onClick={() => {
-          const { redirectPath } = getUserAuthInfo(auth.user);
-          navigate(redirectPath, { replace: true });
-        }}
-        style={{
-          padding: '10px 20px',
-          background: '#667eea',
-          color: 'white',
-          border: 'none',
-          borderRadius: '5px',
-          cursor: 'pointer'
-        }}
-      >
-        Ir manualmente al dashboard
-      </button>
+      <div>✅ ¡Autenticación exitosa!</div>
+      <div>🚀 Redirigiendo...</div>
     </div>
   );
+};
+
+// Role Selection Protection Component
+const RoleSelectionProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isLoading, isAuthenticated, needsRoleSelection, userRoles } = useAuthFlow();
+  
+  console.log('🎭 RoleSelectionProtectedRoute check:', { 
+    isAuthenticated,
+    isLoading,
+    needsRoleSelection,
+    userRoles
+  });
+  
+  if (isLoading) {
+    console.log('⏳ RoleSelectionProtectedRoute: Cargando...');
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        fontSize: '18px'
+      }}>
+        ⏳ Verificando estado...
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    console.log('🔒 RoleSelectionProtectedRoute: Not authenticated, redirecting to login');
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!needsRoleSelection) {
+    // Si ya tiene rol, redirigir al dashboard apropiado
+    console.log('✅ RoleSelectionProtectedRoute: Ya tiene roles, redirigiendo al dashboard');
+    const redirectPath = userRoles?.includes('student') ? '/student-dashboard' : '/tutor-dashboard';
+    return <Navigate to={redirectPath} replace />;
+  }
+
+  console.log('🎯 RoleSelectionProtectedRoute: Mostrando selección de roles');
+  return <>{children}</>;
 };
 
 const App: React.FC = () => {
@@ -155,6 +214,14 @@ const App: React.FC = () => {
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<AuthRedirect />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route 
+            path="/role-selection" 
+            element={
+              <RoleSelectionProtectedRoute>
+                <RoleSelectionPage />
+              </RoleSelectionProtectedRoute>
+            } 
+          />
           <Route 
             path="/student-dashboard" 
             element={

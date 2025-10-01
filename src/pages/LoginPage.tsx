@@ -1,12 +1,13 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import '../styles/LoginPage.css';
-import { getUserAuthInfo } from '../utils/tokenUtils';
+import { useAuthFlow } from '../utils/useAuthFlow';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { isLoading, isAuthenticated, needsRoleSelection, error } = useAuthFlow();
 
   // Función de redirección de cierre de sesión para Cognito
   const signOutRedirect = () => {
@@ -16,14 +17,6 @@ const LoginPage: React.FC = () => {
     window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
 
-  // Verificar el estado de autenticación y redirigir si ya ha iniciado sesión
-  useEffect(() => {
-    if (auth.isAuthenticated && auth.user) {
-      const { redirectPath } = getUserAuthInfo(auth.user);
-      navigate(redirectPath, { replace: true });
-    }
-  }, [auth.isAuthenticated, auth.user, navigate]);
-
   const handleBackToHome = () => {
     navigate('/');
   };
@@ -32,8 +25,12 @@ const LoginPage: React.FC = () => {
     navigate('/register');
   };
 
+  const handleGoToRoleSelection = () => {
+    navigate('/role-selection');
+  };
+
   // Mostrar estado de carga
-  if (auth.isLoading) {
+  if (auth.isLoading || isLoading) {
     return (
       <div className="login-container">
         <div className="login-content">
@@ -47,13 +44,14 @@ const LoginPage: React.FC = () => {
   }
 
   // Mostrar estado de error
-  if (auth.error) {
+  if (auth.error || error) {
+    const errorMessage = auth.error?.message || error || 'Error desconocido';
     return (
       <div className="login-container">
         <div className="login-content">
           <div className="error-state">
             <h2>Error de Autenticación</h2>
-            <p>Ocurrió un error: {auth.error.message}</p>
+            <p>Ocurrió un error: {errorMessage}</p>
             <button 
               className="btn btn-primary" 
               onClick={() => auth.signinRedirect()}
@@ -73,8 +71,37 @@ const LoginPage: React.FC = () => {
     );
   }
 
-  // Mostrar estado de autenticación (esto activará la redirección a través de useEffect)
-  if (auth.isAuthenticated) {
+  // Si está autenticado pero necesita seleccionar rol
+  if (isAuthenticated && needsRoleSelection) {
+    return (
+      <div className="login-container">
+        <div className="login-content">
+          <div className="authenticated-state">
+            <h2>¡Bienvenido!</h2>
+            <p>Sesión iniciada como: {auth.user?.profile?.email}</p>
+            <p>Necesitas seleccionar tu rol para continuar.</p>
+            <div className="form-actions">
+              <button 
+                className="btn btn-primary" 
+                onClick={handleGoToRoleSelection}
+              >
+                Seleccionar Rol
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => signOutRedirect()}
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar estado de autenticación (esto activará la redirección a través de useAuthFlow)
+  if (isAuthenticated) {
     return (
       <div className="login-container">
         <div className="login-content">

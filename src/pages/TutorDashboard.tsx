@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import '../styles/TutorDashboard.css';
-import { getUserAuthInfo } from '../utils/tokenUtils';
-import { useCognitoIntegration } from '../utils/useCognitoIntegration';
+import { useAuthFlow } from '../utils/useAuthFlow';
+import DashboardSwitchButton from '../components/DashboardSwitchButton';
+import AddRoleButton from '../components/AddRoleButton';
+// import { useCognitoIntegration } from '../utils/useCognitoIntegration'; // COMENTADO: Ya no necesario
 
 interface User {
   userId: string;
@@ -52,9 +54,10 @@ interface TutoringSession {
 const TutorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { userRoles, isAuthenticated } = useAuthFlow();
   
-  // Hook para manejar la integración con Cognito
-  const { isProcessing, processingError, isProcessed } = useCognitoIntegration();
+  // COMENTADO: Hook para manejar la integración con Cognito (ya no necesario con useAuthFlow)
+  // const { isProcessing, processingError, isProcessed } = useCognitoIntegration();
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -162,45 +165,30 @@ const TutorDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    console.log('👨‍🏫 TutorDashboard useEffect:', { 
-      isAuthenticated: auth.isAuthenticated,
-      user: auth.user,
-      isProcessed,
-      isProcessing
-    });
-
     // Verificar si el usuario está autenticado y es tutor usando Cognito
-    if (!auth.isAuthenticated || !auth.user) {
-      console.log('❌ Not authenticated, redirecting to login');
+    if (!isAuthenticated) {
       navigate('/login');
       return;
     }
 
-    const { role } = getUserAuthInfo(auth.user);
-    console.log('👤 User role in TutorDashboard:', role);
-    
-    if (role !== 'tutor') {
-      console.log('🚫 Not a tutor, redirecting to home');
+    if (!userRoles || !userRoles.includes('tutor')) {
       navigate('/');
       return;
     }
 
     // Obtener datos del usuario desde Cognito
-    setCurrentUser({
-      userId: auth.user.profile?.sub || 'unknown',
-      name: auth.user.profile?.name || auth.user.profile?.nickname || 'Tutor',
-      email: auth.user.profile?.email || 'No email',
-      role: role,
-      bio: 'Tutor profesional en UpLearn', 
-      specializations: ['Matemáticas', 'Cálculo', 'Álgebra'], 
-      credentials: ['Profesional Certificado']
-    });
-
-    // Mostrar estado de procesamiento de Cognito
-    if (processingError) {
-      console.warn('⚠️ Error procesando Cognito:', processingError);
+    if (auth.user) {
+      setCurrentUser({
+        userId: auth.user.profile?.sub || 'unknown',
+        name: auth.user.profile?.name || auth.user.profile?.nickname || 'Tutor',
+        email: auth.user.profile?.email || 'No email',
+        role: userRoles?.includes('tutor') ? 'tutor' : 'unknown',
+        bio: 'Tutor profesional en UpLearn', 
+        specializations: ['Matemáticas', 'Cálculo', 'Álgebra'], 
+        credentials: ['Profesional Certificado']
+      });
     }
-  }, [auth.isAuthenticated, auth.user, navigate, isProcessed, isProcessing, processingError]);
+  }, [isAuthenticated, userRoles, navigate]);
 
   const handleLogout = () => {
     // Logout usando Cognito
@@ -216,7 +204,7 @@ const TutorDashboard: React.FC = () => {
   };
 
   const handleEditProfile = () => {
-    navigate('/edit-profile');
+    navigate('/edit-profile', { state: { currentRole: 'tutor' } });
   };
 
   const handleAcceptRequest = (requestId: string) => {
@@ -353,7 +341,11 @@ const TutorDashboard: React.FC = () => {
             </button>
           </nav>
 
-          <div className="user-menu-container">
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <DashboardSwitchButton currentRole="tutor" />
+            <AddRoleButton currentRole="tutor" />
+            
+            <div className="user-menu-container">
             <button 
               className="user-avatar"
               onClick={() => setShowUserMenu(!showUserMenu)}
@@ -373,7 +365,8 @@ const TutorDashboard: React.FC = () => {
                   </small>
                   {/* Indicador de sincronización con backend */}
                   <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
-                    {isProcessing && (
+                    {/* COMENTADO: Estado de sincronización ya no necesario con useAuthFlow */}
+                    {/* {isProcessing && (
                       <span style={{ color: '#f59e0b' }}>🔄 Sincronizando con backend...</span>
                     )}
                     {isProcessed && !processingError && (
@@ -381,7 +374,8 @@ const TutorDashboard: React.FC = () => {
                     )}
                     {processingError && (
                       <span style={{ color: '#ef4444' }}>⚠️ Error de sincronización</span>
-                    )}
+                    )} */}
+                    <span style={{ color: '#10b981' }}>✅ Conectado</span>
                   </div>
                 </div>
                 <div className="dropdown-divider"></div>
@@ -396,6 +390,7 @@ const TutorDashboard: React.FC = () => {
                 </button>
               </div>
             )}
+            </div>
           </div>
         </div>
       </header>

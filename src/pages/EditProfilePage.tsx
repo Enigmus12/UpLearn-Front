@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import ApiUserService from '../service/Api-user';
 import '../styles/EditProfilePage.css';
-import { getUserAuthInfo } from '../utils/tokenUtils';
+import { useAuthFlow } from '../utils/useAuthFlow';
 
 interface User {
   userId: string;
@@ -37,9 +37,20 @@ interface UpdateData {
   credentials?: string[];
 }
 
+interface DeleteRoleResponse {
+  userDeleted: boolean;
+  message?: string;
+  remainingRoles?: string[];
+}
+
 const EditProfilePage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const auth = useAuth();
+  const { userRoles, isAuthenticated } = useAuthFlow();
+  
+  // Obtener el rol específico del state de navegación o usar el primer rol como fallback
+  const currentRole = location.state?.currentRole || userRoles?.[0];
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -68,13 +79,12 @@ const EditProfilePage: React.FC = () => {
   useEffect(() => {
     const loadUserProfile = async () => {
       // Verificar autenticación con Cognito
-      if (!auth.isAuthenticated || !auth.user) {
+      if (!isAuthenticated) {
         navigate('/login');
         return;
       }
 
-      const { role } = getUserAuthInfo(auth.user);
-      if (!role) {
+      if (!userRoles || userRoles.length === 0) {
         navigate('/login');
         return;
       }
@@ -82,9 +92,27 @@ const EditProfilePage: React.FC = () => {
       setIsLoading(true);
       
       try {
-        // Obtener datos editables reales del backend usando token de Cognito
-        const editableData = await ApiUserService.getEditableProfile(auth.user.id_token);
-        console.log('Datos editables cargados:', editableData);
+        // Obtener datos específicos del rol usando token de Cognito
+        if (!auth.user?.id_token) {
+          throw new Error('No hay token disponible');
+        }
+        
+        // Validar que el rol específico esté en los roles del usuario
+        if (!userRoles?.includes(currentRole)) {
+          console.error('❌ Rol no válido o no autorizado:', currentRole);
+          throw new Error(`No tienes permisos para editar el perfil de ${currentRole}`);
+        }
+        
+        let editableData;
+        
+        // Usar endpoint específico según el rol
+        if (currentRole === 'student') {
+          editableData = await ApiUserService.getStudentProfile(auth.user.id_token);
+        } else if (currentRole === 'tutor') {
+          editableData = await ApiUserService.getTutorProfile(auth.user.id_token);
+        } else {
+          throw new Error('Rol de usuario no válido');
+        }
         
         // Crear objeto de usuario con datos del token y del backend
         const userData: User = {
@@ -92,7 +120,7 @@ const EditProfilePage: React.FC = () => {
           name: editableData.name || '',
           email: editableData.email || '',
           phoneNumber: editableData.phoneNumber || '',
-          role: role.toUpperCase() as 'STUDENT' | 'TUTOR',
+          role: currentRole.toUpperCase() as 'STUDENT' | 'TUTOR',
           idType: editableData.idType || '',
           idNumber: editableData.idNumber || '',
           educationLevel: editableData.educationLevel || '',
@@ -130,7 +158,7 @@ const EditProfilePage: React.FC = () => {
     };
 
     loadUserProfile();
-  }, [navigate, auth.isAuthenticated, auth.user]);
+  }, [navigate, auth.isAuthenticated, auth.user, userRoles, currentRole]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -193,11 +221,11 @@ const EditProfilePage: React.FC = () => {
       newErrors.phoneNumber = 'El teléfono es requerido';
     }
 
-    if (currentUser?.role === 'STUDENT' && !formData.educationLevel.trim()) {
+    if (currentRole === 'student' && !formData.educationLevel.trim()) {
       newErrors.educationLevel = 'El nivel educativo es requerido';
     }
 
-    if (currentUser?.role === 'TUTOR') {
+    if (currentRole === 'tutor') {
       if (!formData.bio.trim()) {
         newErrors.bio = 'La biografía es requerida';
       }
@@ -239,24 +267,31 @@ const EditProfilePage: React.FC = () => {
       };
 
       // Agregar campos específicos según el rol
-      if (currentUser?.role === 'STUDENT') {
+      if (currentRole === 'student') {
         updateData.educationLevel = formData.educationLevel;
-      } else if (currentUser?.role === 'TUTOR') {
+      } else if (currentRole === 'tutor') {
         updateData.bio = formData.bio;
         updateData.specializations = formData.specializations;
         updateData.credentials = formData.credentials;
       }
 
-      const updatedUser = await ApiUserService.updateProfile(updateData, auth.user.id_token);
-      console.log('Usuario actualizado:', updatedUser);
+      // Usar endpoint específico según el rol actual
+      let updatedUser;
+      if (currentRole === 'student') {
+        updatedUser = await ApiUserService.updateStudentProfile(updateData, auth.user.id_token);
+      } else if (currentRole === 'tutor') {
+        updatedUser = await ApiUserService.updateTutorProfile(updateData, auth.user.id_token);
+      } else {
+        throw new Error('Rol de usuario no válido para actualización');
+      }
       
       setSuccessMessage('¡Perfil actualizado exitosamente!');
 
       // redirigir después de unos segundos
       setTimeout(() => {
-        if (currentUser?.role === 'STUDENT') {
+        if (currentRole === 'student') {
           navigate('/student-dashboard');
-        } else if (currentUser?.role === 'TUTOR') {
+        } else if (currentRole === 'tutor') {
           navigate('/tutor-dashboard');
         } else {
           navigate('/');
@@ -274,9 +309,9 @@ const EditProfilePage: React.FC = () => {
   };
 
   const handleCancel = () => {
-    if (currentUser?.role === 'STUDENT') {
+    if (currentRole === 'student') {
       navigate('/student-dashboard');
-    } else if (currentUser?.role === 'TUTOR') {
+    } else if (currentRole === 'tutor') {
       navigate('/tutor-dashboard');
     } else {
       navigate('/');
@@ -301,18 +336,46 @@ const EditProfilePage: React.FC = () => {
     setErrors({});
 
     try {
-      const message = await ApiUserService.deleteProfile(auth.user.id_token);
-      console.log('Cuenta eliminada:', message);
+      // Usar endpoint específico según el rol para eliminar
+      let result: DeleteRoleResponse;
+      if (currentRole === 'student') {
+        result = await ApiUserService.removeStudentRole(auth.user.id_token) as DeleteRoleResponse;
+      } else if (currentRole === 'tutor') {
+        result = await ApiUserService.removeTutorRole(auth.user.id_token) as DeleteRoleResponse;
+      } else {
+        throw new Error('Rol de usuario no válido para eliminación');
+      }
       
-      // Mostrar mensaje de éxito
-      alert('Tu cuenta ha sido eliminada exitosamente.');
-      
-      // Limpiar datos de autenticación y redirigir
-      auth.removeUser();
-      navigate('/');
+      if (result.userDeleted) {
+        // Si se eliminó completamente el usuario
+        alert('Tu cuenta ha sido eliminada completamente.');
+        // Limpiar datos de autenticación y redirigir
+        auth.removeUser();
+        navigate('/');
+      } else {
+        // Si solo se eliminó el rol específico
+        const roleText = currentRole === 'student' ? 'estudiante' : 'tutor';
+        alert(`Tu rol de ${roleText} ha sido eliminado. ${result.message || ''}`);
+        
+        // Verificar si el usuario tiene otros roles para redirigir apropiadamente
+        if (result.remainingRoles && result.remainingRoles.length > 0) {
+          // Redirigir al dashboard del rol restante
+          const remainingRole = result.remainingRoles[0];
+          if (remainingRole === 'student') {
+            navigate('/student-dashboard');
+          } else if (remainingRole === 'tutor') {
+            navigate('/tutor-dashboard');
+          } else {
+            navigate('/role-selection');
+          }
+        } else {
+          // No quedan roles, ir a selección de roles
+          navigate('/role-selection');
+        }
+      }
       
     } catch (error) {
-      console.error('Error eliminando cuenta:', error);
+      console.error('Error eliminando cuenta/rol:', error);
       setErrors({ 
         general: error instanceof Error ? error.message : 'Error eliminando la cuenta' 
       });
@@ -354,7 +417,7 @@ const EditProfilePage: React.FC = () => {
           <h1>Editar Perfil</h1>
           <p>Actualiza tu información personal</p>
           <div className="user-role-badge">
-            {currentUser?.role === 'STUDENT' ? '🎓 Estudiante' : '👨‍🏫 Tutor'}
+            {currentRole === 'student' ? '🎓 Estudiante' : '👨‍🏫 Tutor'}
           </div>
         </div>
 
@@ -452,8 +515,8 @@ const EditProfilePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Campos específicos de Estudiante */}
-          {currentUser?.role === 'STUDENT' && (
+          {/* Campos específicos para estudiante */}
+          {currentRole === 'student' && (
             <div className="form-section">
               <h2>Información Académica</h2>
               
@@ -478,8 +541,8 @@ const EditProfilePage: React.FC = () => {
             </div>
           )}
 
-          {/* Campos específicos de Tutor */}
-          {currentUser?.role === 'TUTOR' && (
+          {/* Campos específicos para tutor */}
+          {currentRole === 'tutor' && (
             <div className="form-section">
               <h2>Información Profesional</h2>
               
@@ -599,7 +662,7 @@ const EditProfilePage: React.FC = () => {
               </button>
             </div>
             
-            {/* Botón de eliminar cuenta */}
+            {/* Botón de eliminar rol/cuenta */}
             <div className="danger-zone">
               <button 
                 type="button" 
@@ -607,10 +670,13 @@ const EditProfilePage: React.FC = () => {
                 onClick={handleDeleteAccount}
                 disabled={isSaving || isDeleting}
               >
-                🗑️ Eliminar Cuenta
+                🗑️ Eliminar {currentRole === 'student' ? 'Rol de Estudiante' : 'Rol de Tutor'}
               </button>
               <p className="danger-text">
-                Esta acción no se puede deshacer. Se eliminarán todos tus datos permanentemente.
+                {userRoles && userRoles.length > 1 
+                  ? `Se eliminará tu rol de ${currentRole === 'student' ? 'estudiante' : 'tutor'}. Si es tu único rol, se eliminará toda la cuenta.`
+                  : 'Al ser tu único rol, esta acción eliminará completamente tu cuenta y no se puede deshacer.'
+                }
               </p>
             </div>
           </div>
@@ -621,19 +687,31 @@ const EditProfilePage: React.FC = () => {
           <div className="modal-overlay" onClick={handleCancelDelete}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
-                <h2>⚠️ Confirmar Eliminación</h2>
+                <h2>⚠️ Confirmar Eliminación de Rol</h2>
               </div>
               
               <div className="modal-body">
-                <p><strong>¿Estás seguro de que deseas eliminar tu cuenta?</strong></p>
-                <p>Esta acción eliminará permanentemente:</p>
+                <p><strong>¿Estás seguro de que deseas eliminar tu rol de {currentRole === 'student' ? 'estudiante' : 'tutor'}?</strong></p>
+                
+                {userRoles && userRoles.length > 1 ? (
+                  <>
+                    <p>Se eliminará únicamente tu rol de {currentRole === 'student' ? 'estudiante' : 'tutor'}, pero mantendrás acceso con tus otros roles.</p>
+                    <p>Se eliminará:</p>
+                  </>
+                ) : (
+                  <>
+                    <p>Al ser tu único rol, esta acción eliminará completamente tu cuenta.</p>
+                    <p>Se eliminará permanentemente:</p>
+                  </>
+                )}
+                
                 <ul>
                   <li>✗ Tu perfil personal</li>
                   <li>✗ Toda tu información de contacto</li>
-                  {currentUser?.role === 'STUDENT' && (
+                  {currentRole === 'student' && (
                     <li>✗ Tu historial académico y tareas</li>
                   )}
-                  {currentUser?.role === 'TUTOR' && (
+                  {currentRole === 'tutor' && (
                     <>
                       <li>✗ Tu biografía y especializaciones</li>
                       <li>✗ Tus credenciales y certificaciones</li>
@@ -652,7 +730,7 @@ const EditProfilePage: React.FC = () => {
                   onClick={handleConfirmDelete}
                   disabled={isDeleting}
                 >
-                  {isDeleting ? 'Eliminando...' : 'Sí, Eliminar Mi Cuenta'}
+                  {isDeleting ? 'Eliminando...' : `Sí, Eliminar ${currentRole === 'student' ? 'Rol de Estudiante' : 'Rol de Tutor'}`}
                 </button>
                 <button 
                   className="btn btn-secondary"

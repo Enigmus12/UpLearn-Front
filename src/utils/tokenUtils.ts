@@ -19,19 +19,15 @@ export const getUserRoleFromToken = (token: string): string | null => {
     const decodedPayload = atob(paddedPayload.replace(/-/g, '+').replace(/_/g, '/'));
     const tokenData = JSON.parse(decodedPayload);
 
-    console.log('🔍 Token data:', tokenData); // Debug
-
     // Extract role from token - adjust this based on how your Cognito stores the role
-    // Common places: custom:role, cognito:groups, or a custom attribute
     const role = tokenData['custom:role'] || 
                  tokenData['cognito:groups']?.[0] || 
                  tokenData.role ||
                  tokenData['custom:user_type'];
 
-    console.log('🎯 Extracted role:', role); // Debug
     return role || null;
   } catch (error) {
-    console.error('❌ Error decoding token:', error);
+    console.error('Error decoding token:', error);
     return null;
   }
 };
@@ -42,10 +38,7 @@ export const getUserRoleFromToken = (token: string): string | null => {
  * @returns object with authentication status and role
  */
 export const getUserAuthInfo = (user: any) => {
-  console.log(' getUserAuthInfo called with user:', user);
-  
   if (!user || !user.id_token) {
-    console.log(' No user or no id_token');
     return {
       isAuthenticated: false,
       role: null,
@@ -54,7 +47,6 @@ export const getUserAuthInfo = (user: any) => {
   }
 
   const role = getUserRoleFromToken(user.id_token);
-  console.log(' Role from token:', role);
   
   let redirectPath = '/';
   if (role === 'student') {
@@ -62,8 +54,6 @@ export const getUserAuthInfo = (user: any) => {
   } else if (role === 'tutor') {
     redirectPath = '/tutor-dashboard';
   }
-
-  console.log(' Final redirect path:', redirectPath);
 
   return {
     isAuthenticated: true,

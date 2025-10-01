@@ -2,11 +2,12 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import '../styles/RegisterPageCognito.css';
-import { getUserAuthInfo } from '../utils/tokenUtils';
+import { useAuthFlow } from '../utils/useAuthFlow';
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { userRoles, isAuthenticated } = useAuthFlow();
 
   // Configuración de Cognito para registro
   const cognitoConfig = {
@@ -20,18 +21,16 @@ const RegisterPage: React.FC = () => {
     const { clientId, cognitoDomain, redirectUri } = cognitoConfig;
     const signUpUrl = `${cognitoDomain}/signup?client_id=${clientId}&response_type=code&scope=email+openid+profile&redirect_uri=${encodeURIComponent(redirectUri)}`;
     
-    console.log('🔗 Redirigiendo al registro de Cognito:', signUpUrl);
     window.location.href = signUpUrl;
   };
 
   // Verificar si el usuario ya está autenticado
   useEffect(() => {
-    if (auth.isAuthenticated && auth.user) {
-      const { redirectPath } = getUserAuthInfo(auth.user);
-      console.log('✅ Usuario ya autenticado, redirigiendo a:', redirectPath);
+    if (isAuthenticated && userRoles && userRoles.length > 0) {
+      const redirectPath = userRoles.includes('student') ? '/student-dashboard' : '/tutor-dashboard';
       navigate(redirectPath, { replace: true });
     }
-  }, [auth.isAuthenticated, auth.user, navigate]);
+  }, [isAuthenticated, userRoles, navigate]);
 
   const handleBackToHome = () => {
     navigate('/');
@@ -47,7 +46,7 @@ const RegisterPage: React.FC = () => {
       <div className="register-container">
         <div className="register-content">
           <div className="loading-state">
-            <h2>⏳ Verificando estado de autenticación...</h2>
+            <h2> Verificando estado de autenticación...</h2>
             <p>Por favor espera un momento...</p>
           </div>
         </div>
@@ -68,8 +67,12 @@ const RegisterPage: React.FC = () => {
               <button 
                 className="btn btn-primary"
                 onClick={() => {
-                  const { redirectPath } = getUserAuthInfo(auth.user);
-                  navigate(redirectPath);
+                  if (userRoles && userRoles.length > 0) {
+                    const redirectPath = userRoles.includes('student') ? '/student-dashboard' : '/tutor-dashboard';
+                    navigate(redirectPath);
+                  } else {
+                    navigate('/login');
+                  }
                 }}
               >
                 Ir al Dashboard
