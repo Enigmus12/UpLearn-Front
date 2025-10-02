@@ -1,178 +1,148 @@
-/* HomePage.css */
+/* HomePage.css - Simplificado */
+
 .home-container {
   min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  padding: 2rem 1rem;
+  background: var(--primary-gradient);
+  font-family: var(--font-family);
+  padding: var(--spacing-xl) var(--spacing-md);
 }
 
 .content {
   text-align: center;
-  background: white;
-  padding: 3rem 2.5rem;
-  border-radius: 15px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  background: var(--bg-primary);
+  padding: var(--spacing-2xl);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   max-width: 500px;
   width: 90%;
 }
 
 .title {
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
-  color: #333;
+  font-size: var(--font-size-3xl);
+  margin-bottom: var(--spacing-md);
+  color: var(--text-primary);
   font-weight: 700;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: var(--primary-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .subtitle {
-  font-size: 1.2rem;
-  color: #666;
+  font-size: var(--font-size-lg);
+  color: var(--text-muted);
   margin-bottom: 2.5rem;
   line-height: 1.5;
 }
 
-/* Authenticated section styles */
 .authenticated-section {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: var(--spacing-xl);
 }
 
 .user-info {
-  background: #f8f9fa;
-  padding: 1.5rem;
-  border-radius: 10px;
-  border-left: 4px solid #667eea;
-  margin-bottom: 1rem;
+  background: var(--bg-light);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--primary-color);
+  margin-bottom: var(--spacing-md);
 }
 
 .welcome-message {
-  font-size: 1.3rem;
+  font-size: var(--font-size-xl);
   font-weight: 600;
-  color: #333;
-  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
 }
 
 .auth-status {
-  color: #666;
-  font-size: 1rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
   margin: 0;
 }
 
-/* Debug info styles */
 .debug-info {
-  margin-top: 1.5rem;
+  margin-top: var(--spacing-lg);
 }
 
 .debug-info details {
   text-align: left;
-  background: #f1f3f4;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #e1e5e9;
+  background: var(--bg-light);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bg-muted);
 }
 
 .debug-info summary {
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   cursor: pointer;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-sm);
 }
 
 .debug-info pre {
-  font-size: 0.85rem;
-  color: #555;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
   overflow-x: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
   max-width: 100%;
 }
 
-/* Error info styles */
 .error-info {
   background: #fef2f2;
-  color: #dc2626;
-  padding: 1rem;
-  border-radius: 8px;
+  color: var(--danger-color);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-sm);
   border: 1px solid #fecaca;
-  margin-top: 1rem;
+  margin-top: var(--spacing-md);
 }
 
 .error-info h3 {
-  margin-bottom: 0.5rem;
-  font-size: 1.1rem;
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-lg);
 }
 
 .error-info p {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .buttons-container {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
-.btn {
-  padding: 0.9rem 2rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
+/* Button específicos para HomePage */
 .btn-login {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: var(--primary-gradient);
   color: white;
-}
-
-.btn-login:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
 }
 
 .btn-register {
   background: transparent;
-  color: #667eea;
-  border: 2px solid #667eea;
+  color: var(--primary-color);
+  border: 2px solid var(--primary-color);
 }
 
 .btn-register:hover {
-  background: #667eea;
+  background: var(--primary-color);
   color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
 }
 
 .btn-dashboard {
-  background: linear-gradient(135deg, #28a745, #20c997);
+  background: var(--success-gradient);
   color: white;
-}
-
-.btn-dashboard:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(40, 167, 69, 0.4);
 }
 
 .btn-logout {
-  background: linear-gradient(135deg, #dc3545, #e55353);
+  background: var(--danger-gradient);
   color: white;
-}
-
-.btn-logout:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(220, 53, 69, 0.4);
 }
 
 .btn-logout-cognito {
@@ -180,34 +150,29 @@
   color: white;
 }
 
-.btn-logout-cognito:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(253, 126, 20, 0.4);
-}
-
-/* Responsive design */
+/* Responsive */
 @media (max-width: 480px) {
   .content {
-    padding: 2rem 1.5rem;
+    padding: var(--spacing-xl) var(--spacing-lg);
   }
   
   .title {
-    font-size: 2rem;
+    font-size: var(--font-size-2xl);
   }
   
   .subtitle {
-    font-size: 1rem;
+    font-size: var(--font-size-base);
   }
 
   .user-info {
-    padding: 1rem;
+    padding: var(--spacing-md);
   }
 
   .welcome-message {
-    font-size: 1.1rem;
+    font-size: var(--font-size-lg);
   }
 
   .debug-info pre {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
   }
 }

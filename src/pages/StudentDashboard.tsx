@@ -1,10 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import '../styles/StudentDashboard.css';
-import { getUserAuthInfo } from '../utils/tokenUtils';
-import { useCognitoIntegration } from '../utils/useCognitoIntegration';
+import { useAuthFlow } from '../utils/useAuthFlow';
 import ApiSearchService from '../service/Api-search';
+import { listStudentReservations } from '../service/Api-reservations';
+import DashboardSwitchButton from '../components/DashboardSwitchButton';
+import AddRoleButton from '../components/AddRoleButton';
+
+// --- tutor name cache (localStorage) ---
+const TUTOR_NAME_MAP_KEY = "uplearn:tutorNameMap";
+function loadTutorNameMap(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(TUTOR_NAME_MAP_KEY) || "{}"); }
+  catch { return {}; }
+}
+function formatTime(hhmmss: string) {
+  return (hhmmss || "").slice(0, 5); // "HH:mm:ss" -> "HH:mm"
+}
+function formatDate(iso: string) {
+  return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
+    weekday: "short", year: "numeric", month: "short", day: "numeric"
+  });
+}
 
 interface User {
   userId: string;
@@ -15,11 +32,7 @@ interface User {
 }
 
 interface Tutor {
-  userId?: string;
-  sub?: string;
-  id?: string;
-  _id?: string;
-  email?: string;
+  userId: string;
   name: string;
   bio: string;
   specializations: string[];
@@ -27,7 +40,6 @@ interface Tutor {
   rating?: number;
   hourlyRate?: number;
 }
-
 
 interface Task {
   id: string;
@@ -42,9 +54,10 @@ interface Task {
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { userRoles, isAuthenticated } = useAuthFlow();
   
-  // Hook para manejar la integración con Cognito
-  const { isProcessing, processingError, isProcessed } = useCognitoIntegration();
+  // COMENTADO: Hook para manejar la integración con Cognito (ya no necesario con useAuthFlow)
+  // const { isProcessing, processingError, isProcessed } = useCognitoIntegration();
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -66,18 +79,27 @@ const StudentDashboard: React.FC = () => {
     try {
       // Antes: const result = await ApiUserService.searchTutors(search);
       const result = await ApiSearchService.searchTutors(search);
-      const normalized = (result || []).map((t: any) => ({
-        ...t,
-        userId: t.userId ?? t.sub ?? t.id ?? t._id ?? null,
-      }));
-
-      setTutors(normalized);
+      setTutors(result || []);
     } catch (err: any) {
       setErrorSearch(err?.message || 'Error realizando la búsqueda');
     } finally {
       setLoadingSearch(false);
     }
   };
+
+  
+  useEffect(() => {
+    const sub = auth.user?.profile?.sub;
+    const token = auth.user?.access_token;
+    if (!sub || !token) return;
+    listStudentReservations(sub, token)
+      .then(setStudentReservations)
+      .catch(err => console.error('Error cargando reservas estudiante', err));
+  }, [auth.user]);
+
+  useEffect(() => {
+    setTutorNames(loadTutorNameMap());
+  }, []);
 
   const [tasks, setTasks] = useState<Task[]>([
     {
@@ -100,6 +122,9 @@ const StudentDashboard: React.FC = () => {
     }
   ]);
 
+  const [studentReservations, setStudentReservations] = useState<any[]>([]);
+  const [tutorNames, setTutorNames] = useState<Record<string, string>>({});
+
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -109,43 +134,32 @@ const StudentDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    console.log('🎓 StudentDashboard useEffect:', { 
-      isAuthenticated: auth.isAuthenticated,
-      user: auth.user,
-      isProcessed,
-      isProcessing
-    });
+    // Solo proceder si tenemos información completa del usuario
+    if (isAuthenticated === null || userRoles === null) {
+      return;
+    }
 
     // Verificar si el usuario está autenticado y es estudiante usando Cognito
-    if (!auth.isAuthenticated || !auth.user) {
-      console.log(' Not authenticated, redirecting to login');
+    if (!isAuthenticated) {
       navigate('/login');
       return;
     }
 
-    const { role } = getUserAuthInfo(auth.user);
-    console.log(' User role in StudentDashboard:', role);
-    
-    if (role !== 'student') {
-      console.log(' Not a student, redirecting to home');
+    if (!userRoles?.includes('student')) {
       navigate('/');
       return;
     }
 
     // Obtener datos del usuario desde Cognito
-    setCurrentUser({
-      userId: auth.user.profile?.sub || 'unknown',
-      name: auth.user.profile?.name || auth.user.profile?.nickname || 'Usuario',
-      email: auth.user.profile?.email || 'No email',
-      role: role,
-      educationLevel: 'Pregrado' // Este valor podrías obtenerlo también del token si lo configuras en Cognito
-    });
-
-    // Mostrar estado de procesamiento de Cognito
-    if (processingError) {
-      console.warn(' Error procesando Cognito:', processingError);
+    if (auth.user) {
+      setCurrentUser({
+        userId: auth.user.profile?.sub || 'unknown',
+        name: auth.user.profile?.name || auth.user.profile?.nickname || 'Usuario',
+        email: auth.user.profile?.email || 'No email',
+        role: 'student'
+      });
     }
-  }, [auth.isAuthenticated, auth.user, navigate, isProcessed, isProcessing, processingError]);
+  }, [isAuthenticated, userRoles, navigate, auth.user]);
 
   const handleLogout = () => {
     // Logout usando Cognito
@@ -161,7 +175,7 @@ const StudentDashboard: React.FC = () => {
   };
 
   const handleEditProfile = () => {
-    navigate('/edit-profile');
+    navigate('/edit-profile', { state: { currentRole: 'student' } });
   };
 
   const handlePostTask = () => {
@@ -260,7 +274,11 @@ const StudentDashboard: React.FC = () => {
             </button>
           </nav>
 
-          <div className="user-menu-container">
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <DashboardSwitchButton currentRole="student" />
+            <AddRoleButton currentRole="student" />
+            
+            <div className="user-menu-container">
             <button 
               className="user-avatar"
               onClick={() => setShowUserMenu(!showUserMenu)}
@@ -288,6 +306,7 @@ const StudentDashboard: React.FC = () => {
                 </button>
               </div>
             )}
+            </div>
           </div>
         </div>
       </header>
@@ -381,44 +400,51 @@ const StudentDashboard: React.FC = () => {
                 <p>No hay resultados aún. Prueba con “java”.</p>
               )}
 
-              {tutors.map((tutor: any, idx: number) => {
-              // Tomamos el ID normalizado (o intentamos otros por si acaso)
-              const id = tutor.userId ?? tutor.sub ?? tutor.id ?? tutor._id ?? null;
+              {tutors.map((tutor: any) => {
+                const tutorId = tutor.userId || tutor.sub || tutor.id || tutor.tutorId || tutor.cognitoSub;
+                const tutorName = tutor.name || tutor.fullName || tutor.email || 'Tutor';
+                return (
+                  <div key={tutorId} className="tutor-card">
+                    <div className="tutor-card-header">
+                      <div className="tutor-title">
+                        <strong className="tutor-name">{tutor.name || 'Tutor'}</strong>
+                        <br />
+                        <span className="tutor-email">{tutor.email}</span>
+                      </div>
+                    </div>
 
-              // Key estable: prioriza id/email/name y, como último recurso, idx
-              const key = id ?? tutor.email ?? tutor.name ?? idx;
+                    {tutor.bio && <p className="tutor-bio">{tutor.bio}</p>}
 
-              return (
-                <div key={key} className="tutor-card">
-                  <div className="tutor-card-header">
-                    <div className="tutor-title">
-                      <strong className="tutor-name">{tutor.name || 'Tutor'}</strong>
-                      <br />
-                      <span className="tutor-email">{tutor.email}</span>
+                    {Array.isArray(tutor.specializations) && tutor.specializations.length > 0 && (
+                      <div className="tutor-tags">
+                        {tutor.specializations.map((s: string) => (
+                          <span key={`${tutorId}-${s}`} className="tag">{s}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* ACCIONES: Reservar (pbtn primary) y Ver perfil (btn-secondary) */}
+                    <div className="tutor-actions">
+                      <button
+                        className="pbtn primary btn-primary"
+                        onClick={() => navigate('/reservations', { state: { tutorId, tutorName } })}
+                        title="Reservar clase con este tutor"
+                      >
+                        Reservar
+                      </button>
+
+                      <button
+                        className="btn-secondary"
+                        onClick={() => navigate(`/tutor/${encodeURIComponent(tutorId)}`)}
+                        title="Ver perfil del tutor"
+                      >
+                        Ver perfil
+                      </button>
                     </div>
                   </div>
+                );
+              })}
 
-                  {tutor.bio && <p className="tutor-bio">{tutor.bio}</p>}
-
-                  {Array.isArray(tutor.specializations) && tutor.specializations.length > 0 && (
-                    <div className="tutor-tags">
-                      {tutor.specializations.map((s: string, i: number) => (
-                        <span key={`${key}-spec-${i}`} tabIndex={0} className="tag">{s}</span>
-                      ))}
-                    </div>
-                  )}
-                  <br />
-
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => id ? navigate(`/reservar/${id}`) : alert('Este tutor no tiene un ID válido para reservar.')}
-                    disabled={!id}
-                  >
-                    Reservar
-                  </button>
-                </div>
-              );
-            })}
             </div>
           </section>
         </div>
@@ -426,49 +452,7 @@ const StudentDashboard: React.FC = () => {
 
 
 
-        {/* My Tasks Section */}
-        {activeSection === 'my-tasks' && (
-          <div className="tasks-section">
-            <h1>Mis Tareas 📋</h1>
-            
-            <div className="tasks-grid">
-              {tasks.map(task => (
-                <div key={task.id} className="task-card">
-                  <div className="task-header">
-                    <h3>{task.title}</h3>
-                    <div className="task-meta">
-                      <span 
-                        className="priority-badge"
-                        style={{ backgroundColor: getPriorityColor(task.priority) }}
-                      >
-                        {task.priority.toUpperCase()}
-                      </span>
-                      <span 
-                        className="status-badge"
-                        style={{ color: getStatusColor(task.status) }}
-                      >
-                        {task.status.replace('_', ' ').toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <p className="task-description">{task.description}</p>
-                  
-                  <div className="task-details">
-                    <span className="task-subject">📚 {task.subject}</span>
-                    <span className="task-due-date">📅 {task.dueDate}</span>
-                  </div>
-                  
-                  <div className="task-actions">
-                    <button className="btn-primary">Ver Detalles</button>
-                    <button className="btn-secondary">Editar</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
+        
         {/* Post Task Section */}
         {activeSection === 'post-task' && (
           <div className="post-task-section">
@@ -562,7 +546,54 @@ const StudentDashboard: React.FC = () => {
             </div>
           </div>
         )}
-      </main>
+      
+      <section>
+        <h2>Mis Reservas</h2>
+
+        {studentReservations.length === 0 ? (
+          <p>No tienes reservas.</p>
+        ) : (
+          <div className="tasks-grid">
+            {studentReservations.map((r: any) => {
+              const name = tutorNames[r.tutorId] || "Tutor";
+              return (
+                <div key={r.id || r.reservationId} className="task-card">
+                  <div className="task-header">
+                    <h3>Sesión con {name}</h3>
+                    <div className="task-meta">
+                      <span className="status-badge" style={{ color: "#3b82f6" }}>
+                        {(r.status || "reserved").toString().toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="task-description">
+                    Clase personalizada con {name}.
+                  </p>
+
+                  <div className="task-details">
+                    <span className="task-subject">📅 {formatDate(r.day)}</span>
+                    <span className="task-due-date">⏰ {formatTime(r.start)} – {formatTime(r.end)}</span>
+                  </div>
+
+                  <div className="task-actions">
+                    <button
+                      className="btn-primary"
+                      onClick={() =>
+                        navigate('/reservations', { state: { tutorId: r.tutorId, tutorName: name } })
+                      }
+                    >
+                      Ver Disponibilidad
+                    </button>
+                    <button className="btn-secondary">Detalles</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </main>
     </div>
   );
 };

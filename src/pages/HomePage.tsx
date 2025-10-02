@@ -2,11 +2,12 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import '../styles/HomePage.css';
-import { getUserAuthInfo } from '../utils/tokenUtils';
+import { useAuthFlow } from '../utils/useAuthFlow';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { userRoles, isAuthenticated } = useAuthFlow();
 
   const handleLogin = () => {
     navigate('/login');
@@ -28,9 +29,12 @@ const HomePage: React.FC = () => {
   };
 
   const goToDashboard = () => {
-    if (auth.user) {
-      const { redirectPath } = getUserAuthInfo(auth.user);
+    if (isAuthenticated && userRoles && userRoles.length > 0) {
+      // Priorizar estudiante si tiene ambos roles
+      const redirectPath = userRoles.includes('student') ? '/student-dashboard' : '/tutor-dashboard';
       navigate(redirectPath);
+    } else {
+      navigate('/login');
     }
   };
 

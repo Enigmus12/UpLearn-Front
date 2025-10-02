@@ -192,3 +192,15 @@
   .res-title { font-size: 1.3rem; }
   .res-grid { min-width: 640px; }
 }
+/* Asegura que el header del dashboard (reutilizado) se vea bien dentro de res-page */
+.res-page .dashboard-header.res-dashboard-header {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  padding: 16px 24px;
+}
+
+/* Ajusta el margen del header específico de reservas para que no choque */
+.res-page .res-header {
+  margin-top: 0;
+}
+

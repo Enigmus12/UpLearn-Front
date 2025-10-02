@@ -24,21 +24,17 @@ export const useCognitoIntegration = () => {
         setProcessingError(null);
 
         try {
-          console.log(' Procesando usuario de Cognito en backend...');
-          console.log(' Token enviado:', auth.user.id_token.substring(0, 50) + '...');
-
           const backendUser = await ApiUserService.processCognitoUser(auth.user.id_token);
           
-          console.log(' Usuario procesado exitosamente en backend:', backendUser);
           setIsProcessed(true);
 
         } catch (error) {
-          console.error(' Error procesando usuario de Cognito:', error);
+          console.error('Error procesando usuario de Cognito:', error);
           setProcessingError(error instanceof Error ? error.message : 'Error desconocido');
           
           // Mostrar advertencia al usuario pero no bloquear la aplicación
           const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-          console.warn(` No se pudo sincronizar con el backend: ${errorMessage}`);
+          console.warn(`No se pudo sincronizar con el backend: ${errorMessage}`);
         } finally {
           setIsProcessing(false);
         }

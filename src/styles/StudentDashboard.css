@@ -148,19 +148,7 @@
   animation: fadeIn 0.2s ease-out;
 }
 
-/* Ensure dropdown content is visible */
-.user-dropdown {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  min-width: 220px;
-  z-index: 1000;
-  animation: fadeIn 0.2s ease-out;
-  color: #333; /* Base color for the dropdown */
-}
+
 
 /* Specific styles for dropdown text elements */
 .user-dropdown .user-email {
@@ -236,15 +224,6 @@
 /* Override global dashboard container styles for dropdown */
 .dashboard-container .user-dropdown p {
   color: #333 !important;
-}
-
-.dashboard-container .user-dropdown .user-email {
-  color: #333 !important;
-  font-weight: 500;
-}
-
-.dashboard-container .user-dropdown .user-role {
-  color: #666 !important;
 }
 
 .dropdown-divider {
@@ -478,12 +457,10 @@
 
 /* Resultados */
 .dashboard-container .tutor-results {
-  margin-top: 1rem;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 700px;
+  justify-content: start;      /* la columna pegada a la izquierda */
   gap: 1rem;
-  justify-items: center;
-
 }
 
 /* Tarjeta de tutor */
@@ -494,6 +471,9 @@
   padding: 1rem 1.25rem;
   box-shadow: 0 4px 14px rgba(17, 24, 39, 0.06);
   transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
+  width: 700px;
+  max-width: 700px;            /* evita que se encoja */
+  text-align: left;
 }
 .dashboard-container .tutor-card:hover {
   transform: translateY(-2px);
@@ -745,6 +725,8 @@
   transition: all 0.3s ease;
   border: none;
   font-size: 0.9rem;
+  margin-left: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .btn-primary {
