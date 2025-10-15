@@ -10,7 +10,7 @@ import TutorDashboard from './pages/TutorDashboard';
 import EditProfilePage from './pages/EditProfilePage';
 import RoleSelectionPage from './pages/RoleSelectionPage';
 import { useAuthFlow } from './utils/useAuthFlow';
-
+import ReservationPage from "./pages/ReservationPage";
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ 
   children, 
@@ -58,7 +58,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   if (allowedRoles && allowedRoles.length > 0) {
     console.log('🎭 ProtectedRoute: User roles:', userRoles, 'Allowed roles:', allowedRoles);
     
-    if (!userRoles || !userRoles.some(role => allowedRoles.includes(role))) {
+    if (!userRoles?.some(role => allowedRoles.includes(role))) {
       console.log('❌ ProtectedRoute: Role not allowed, redirecting to home');
       return <Navigate to="/" replace />;
     }
@@ -246,6 +246,10 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } 
           />
+         
+        <Route path="/reservations" element={<ReservationPage />} />
+        <Route path="/reservations/:tutorId" element={<ReservationPage />} />
+
         </Routes>
       </div>
     </Router>

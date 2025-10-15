@@ -1,0 +1,206 @@
+/* Contenedor general */
+.res-page {
+  min-height: 100vh;
+  background: #f8fafc;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #1f2937;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header con gradiente como HomePage */
+.res-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  padding: 1.25rem 2rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+}
+
+.res-title {
+  margin: 0 0 .5rem 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+.res-title-id {
+  opacity: .9;
+  font-weight: 700;
+}
+
+/* Toolbar */
+.res-toolbar {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+.res-toolbar-split {
+  width: 1px;
+  height: 28px;
+  background: rgba(255,255,255,.35);
+  margin: 0 .25rem 0 .5rem;
+}
+.res-range {
+  background: rgba(255,255,255,.15);
+  border: 1px solid rgba(255,255,255,.25);
+  padding: .45rem .75rem;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* Mensajes */
+.res-error {
+  margin-top: .75rem;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  padding: .65rem .8rem;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.res-loading, .res-empty {
+  text-align: center;
+  padding: 1.5rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Main */
+.res-main {
+  max-width: 1200px;
+  width: 100%;
+  margin: 1.25rem auto;
+  padding: 0 1rem 2rem;
+}
+
+/* Grid */
+.res-grid-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(17, 24, 39, 0.06);
+}
+
+.res-grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 760px;
+}
+
+.res-grid thead th {
+  position: sticky;
+  top: 0;
+  background: #fafaff;
+  color: #111827;
+  text-align: left;
+  font-weight: 700;
+  padding: .8rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.res-grid-hour {
+  width: 120px;
+}
+
+.res-grid-day {
+  text-align: center;
+}
+
+.res-grid tbody td {
+  padding: .5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.res-grid-hourcell {
+  background: #fcfcff;
+  color: #334155;
+  font-weight: 600;
+  border-right: 1px solid #eef2ff;
+  width: 120px;
+}
+
+.res-grid-slotcell {
+  text-align: center;
+}
+
+/* Botón de slot */
+.res-slot-btn {
+  padding: .5rem .85rem;
+  border-radius: 10px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  transition: all .2s ease;
+  min-width: 104px;
+}
+.res-slot-btn--free {
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(99,102,241,.25);
+}
+.res-slot-btn--free:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(124,58,237,.30);
+}
+.res-slot-btn--busy {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+  cursor: not-allowed;
+}
+
+/* Footer */
+.res-footer {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto 2rem;
+  padding: 0 1rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* Reutiliza tus botones existentes */
+.btn {
+  padding: 0.65rem 1rem;
+  font-size: .95rem;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .2s ease;
+  border: none;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.35);
+}
+.btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+.btn-secondary:hover {
+  background: #e5e7eb;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .res-title { font-size: 1.3rem; }
+  .res-grid { min-width: 640px; }
+}
+/* Asegura que el header del dashboard (reutilizado) se vea bien dentro de res-page */
+.res-page .dashboard-header.res-dashboard-header {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  padding: 16px 24px;
+}
+
+/* Ajusta el margen del header específico de reservas para que no choque */
+.res-page .res-header {
+  margin-top: 0;
+}
+

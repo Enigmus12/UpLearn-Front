@@ -38,6 +38,7 @@ UpLearn-Front/
 1. **Instalar dependencias:**
    ```bash
    npm install --legacy-peer-deps
+   npm i dayjs
    ```
 
 2. **Iniciar el servidor de desarrollo:**
