@@ -29,14 +29,14 @@ const RoleSelectionPage: React.FC = () => {
     try {
       // Enviar los roles seleccionados al backend junto con el token de Cognito
       await ApiUserService.saveUserRole(auth.user.id_token, selectedRoles);
-      
+
       // Limpiar estado global para forzar recarga de useAuthFlow
       clearAuthState();
-      
+
       // Redirigir directamente al dashboard apropiado
       const redirectPath = selectedRoles.includes('student') ? '/student-dashboard' : '/tutor-dashboard';
       navigate(redirectPath, { replace: true });
-      
+
     } catch (error) {
       console.error('Error guardando roles:', error);
       setError('Error al guardar los roles. Inténtalo de nuevo.');
@@ -102,10 +102,11 @@ const RoleSelectionPage: React.FC = () => {
 
         <div className="roles-grid">
           {roles.map((role) => (
-            <div
+            <label
               key={role.value}
               className={`role-card ${selectedRoles.includes(role.value) ? 'selected' : ''}`}
-              onClick={() => toggleRole(role.value)}
+              htmlFor={role.value}
+              onTouchStart={() => toggleRole(role.value)}
             >
               <div className="role-icon">{role.icon}</div>
               <h3 className="role-title">{role.title}</h3>
@@ -119,9 +120,9 @@ const RoleSelectionPage: React.FC = () => {
                   checked={selectedRoles.includes(role.value)}
                   onChange={() => toggleRole(role.value)}
                 />
-                <label htmlFor={role.value}>Seleccionar</label>
+                <span>Seleccionar</span>
               </div>
-            </div>
+            </label>
           ))}
         </div>
 

@@ -10,6 +10,10 @@ import TutorDashboard from './pages/TutorDashboard';
 import EditProfilePage from './pages/EditProfilePage';
 import RoleSelectionPage from './pages/RoleSelectionPage';
 import { useAuthFlow } from './utils/useAuthFlow';
+import TutorAvailabilityPage from './pages/TutorAvailabilityPage';
+import TutorClassesPage from './pages/TutorClassesPage';
+import ProfileViewPage from './pages/ProfileViewPage';
+import BookTutorPage from './pages/BookTutorPage';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ 
@@ -17,7 +21,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   allowedRoles 
 }) => {
   const { isLoading, isAuthenticated, userRoles, needsRoleSelection } = useAuthFlow();
-  
+
   console.log('🛡️ ProtectedRoute check:', { 
     isAuthenticated,
     isLoading,
@@ -101,7 +105,7 @@ const AuthRedirect: React.FC = () => {
       navigate('/role-selection', { replace: true });
       return;
     }
-    
+    // Si tiene roles, redirigir al dashboard correspondiente
     if (userRoles && userRoles.length > 0) {
       const redirectPath = userRoles.includes('student') ? '/student-dashboard' : '/tutor-dashboard';
       console.log('📊 AuthRedirect: Redirigiendo a:', redirectPath);
@@ -111,7 +115,7 @@ const AuthRedirect: React.FC = () => {
 
     console.log('🤔 AuthRedirect: Estado inesperado, no redirigiendo');
   }, [isAuthenticated, isLoading, needsRoleSelection, userRoles, navigate]);
-
+  // Mostrar estados de carga o error
   if (auth.isLoading || isLoading) {
     return (
       <div style={{ 
@@ -125,7 +129,7 @@ const AuthRedirect: React.FC = () => {
       </div>
     );
   }
-
+  // Mostrar error si existe
   if (auth.error || error) {
     return (
       <div style={{ 
@@ -174,7 +178,7 @@ const RoleSelectionProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ 
     needsRoleSelection,
     userRoles
   });
-  
+  // Mientras se carga, mostrar indicador
   if (isLoading) {
     console.log('⏳ RoleSelectionProtectedRoute: Cargando...');
     return (
@@ -194,7 +198,7 @@ const RoleSelectionProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ 
     console.log('🔒 RoleSelectionProtectedRoute: Not authenticated, redirecting to login');
     return <Navigate to="/login" replace />;
   }
-
+  // Si no necesita selección de roles, redirigir
   if (!needsRoleSelection) {
     // Si ya tiene rol, redirigir al dashboard apropiado
     console.log('✅ RoleSelectionProtectedRoute: Ya tiene roles, redirigiendo al dashboard');
@@ -214,6 +218,7 @@ const App: React.FC = () => {
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<AuthRedirect />} />
           <Route path="/register" element={<RegisterPage />} />
+          
           <Route 
             path="/role-selection" 
             element={
@@ -222,6 +227,7 @@ const App: React.FC = () => {
               </RoleSelectionProtectedRoute>
             } 
           />
+          
           <Route 
             path="/student-dashboard" 
             element={
@@ -238,6 +244,41 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } 
           />
+
+          <Route 
+            path="/availability" 
+            element={
+              <ProtectedRoute allowedRoles={['tutor']}>
+                <TutorAvailabilityPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route
+            path="/profile/:role/:userId"
+            element={
+              <ProtectedRoute>
+                <ProfileViewPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/book/:tutorId"
+            element={
+              <ProtectedRoute allowedRoles={['student']}>
+                <BookTutorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route 
+            path="/tutor-classes" 
+            element={
+              <ProtectedRoute allowedRoles={['tutor']}>
+                <TutorClassesPage />
+              </ProtectedRoute>
+            } 
+          />
+          
           <Route 
             path="/edit-profile" 
             element={
