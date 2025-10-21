@@ -6,14 +6,14 @@ interface AddRoleButtonProps {
   className?: string;
 }
 
-const AddRoleButton: React.FC<AddRoleButtonProps> = ({ 
-  currentRole, 
-  className = '' 
+const AddRoleButton: React.FC<AddRoleButtonProps> = ({
+  currentRole,
+  className = ''
 }) => {
   const { addRole, canAddRole, isLoading, error, success, clearMessages } = useAddRole();
   const [canAdd, setCanAdd] = useState(false);
   const [showMessage, setShowMessage] = useState(false);
-  
+
   const targetRole = currentRole === 'student' ? 'tutor' : 'student';
   const targetRoleText = targetRole === 'student' ? 'Estudiante' : 'Tutor';
   const targetIcon = targetRole === 'student' ? '📚' : '👨‍🏫';
@@ -57,13 +57,13 @@ const AddRoleButton: React.FC<AddRoleButtonProps> = ({
           {isLoading ? 'Añadiendo...' : `Ser ${targetRoleText}`}
         </span>
       </button>
-      
+
       {showMessage && (success || error) && (
         <div className={`add-role-message ${success ? 'success' : 'error'}`}>
           <div className="message-content">
             <span className="message-icon">{success ? '✅' : '❌'}</span>
             <span className="message-text">{success || error}</span>
-            <button 
+            <button
               className="message-close"
               onClick={() => {
                 setShowMessage(false);

@@ -7,7 +7,7 @@ import DashboardSwitchButton from '../components/DashboardSwitchButton';
 import AddRoleButton from '../components/AddRoleButton';
 import TutorAvailabilityPage from './TutorAvailabilityPage';
 import TutorClassesPage from './TutorClassesPage';
-
+// Definición de tipos
 interface User {
   userId: string;
   name: string;
@@ -17,7 +17,7 @@ interface User {
   specializations?: string[];
   credentials?: string[];
 }
-
+// Definición de tipos para datos simulados
 interface Student {
   id: string;
   name: string;
@@ -27,7 +27,7 @@ interface Student {
   status: 'active' | 'inactive';
   sessionsCompleted: number;
 }
-
+//  Definición de tipos para solicitudes y sesiones
 interface TutoringRequest {
   id: string;
   studentName: string;
@@ -37,7 +37,7 @@ interface TutoringRequest {
   status: 'pending' | 'accepted' | 'rejected';
   priority: 'low' | 'medium' | 'high';
 }
-
+// Definición de tipos para sesiones de tutoría
 interface TutoringSession {
   id: string;
   title: string;
@@ -51,16 +51,16 @@ interface TutoringSession {
   enrolledStudents: number;
   status: 'scheduled' | 'completed' | 'cancelled';
 }
-
+// Componente principal del dashboard del tutor
 const TutorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
   const { userRoles, isAuthenticated } = useAuthFlow();
-
+  //  Estado del componente
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'dashboard' | 'students' | 'requests' | 'availability' | 'sessions' | 'create-session'>('dashboard');
-
+  // Datos simulados
   const [students] = useState<Student[]>([
     {
       id: '1',
@@ -90,7 +90,7 @@ const TutorDashboard: React.FC = () => {
       sessionsCompleted: 3
     }
   ]);
-
+  // Estado para solicitudes y sesiones
   const [requests, setRequests] = useState<TutoringRequest[]>([
     {
       id: '1',
@@ -120,7 +120,7 @@ const TutorDashboard: React.FC = () => {
       priority: 'low'
     }
   ]);
-
+  // Estado para sesiones de tutoría
   const [sessions, setSessions] = useState<TutoringSession[]>([
     {
       id: '1',
@@ -149,7 +149,7 @@ const TutorDashboard: React.FC = () => {
       status: 'scheduled'
     }
   ]);
-
+  // Estado para nueva sesión de tutoría
   const [newSession, setNewSession] = useState({
     title: '',
     description: '',
@@ -160,18 +160,18 @@ const TutorDashboard: React.FC = () => {
     price: 25000,
     maxStudents: 5
   });
-
+  // Efecto para verificar autenticación y cargar datos del usuario
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
-
+    // Asegurarse de que el usuario tenga rol de tutor
     if (!userRoles || !userRoles.includes('tutor')) {
       navigate('/');
       return;
     }
-
+    // Cargar datos del usuario actual
     if (auth.user) {
       setCurrentUser({
         userId: auth.user.profile?.sub || 'unknown',
@@ -184,23 +184,23 @@ const TutorDashboard: React.FC = () => {
       });
     }
   }, [isAuthenticated, userRoles, navigate, auth.user]);
-
+  // Manejadores de eventos
   const handleLogout = () => {
     auth.removeUser();
     navigate('/login');
   };
-
+  // Redirección para cerrar sesión en Cognito
   const signOutRedirect = () => {
     const clientId = "lmk8qk12er8t8ql9phit3u12e";
     const logoutUri = "http://localhost:3000";
     const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
     globalThis.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
-
+  // Manejador para editar perfil
   const handleEditProfile = () => {
     navigate('/edit-profile', { state: { currentRole: 'tutor' } });
   };
-
+  // Manejadores para solicitudes de tutoría
   const handleAcceptRequest = (requestId: string) => {
     setRequests(prev => prev.map(req =>
       req.id === requestId
@@ -209,7 +209,7 @@ const TutorDashboard: React.FC = () => {
     ));
     alert('Solicitud aceptada. El estudiante será notificado.');
   };
-
+  // Manejador para rechazar solicitud
   const handleRejectRequest = (requestId: string) => {
     setRequests(prev => prev.map(req =>
       req.id === requestId
@@ -218,7 +218,7 @@ const TutorDashboard: React.FC = () => {
     ));
     alert('Solicitud rechazada.');
   };
-
+  // Manejador para crear nueva sesión de tutoría
   const handleCreateSession = () => {
     if (newSession.title && newSession.subject && newSession.date && newSession.time) {
       const session: TutoringSession = {
@@ -241,7 +241,7 @@ const TutorDashboard: React.FC = () => {
       alert('Sesión de tutoría creada exitosamente!');
     }
   };
-
+  // Funciones para obtener colores según prioridad y estado
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high': return '#ef4444';
@@ -250,7 +250,7 @@ const TutorDashboard: React.FC = () => {
       default: return '#6b7280';
     }
   };
-
+  // Función para obtener colores según estado
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'accepted': return '#10b981';
@@ -264,7 +264,7 @@ const TutorDashboard: React.FC = () => {
       default: return '#6b7280';
     }
   };
-
+  // Renderizado del componente
   if (auth.isLoading) {
     return (
       <div style={{
@@ -278,7 +278,7 @@ const TutorDashboard: React.FC = () => {
       </div>
     );
   }
-
+  // Mostrar cargando si no hay usuario
   if (!currentUser) {
     return (
       <div style={{
@@ -577,8 +577,9 @@ const TutorDashboard: React.FC = () => {
                 </div>
 
                 <div className="form-group">
-                  <label>Descripción</label>
+                  <label htmlFor="session-description">Descripción</label>
                   <textarea
+                    id="session-description"
                     value={newSession.description}
                     onChange={(e) => setNewSession({ ...newSession, description: e.target.value })}
                     placeholder="Describe los temas que se cubrirán..."
@@ -589,8 +590,9 @@ const TutorDashboard: React.FC = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Materia</label>
+                    <label htmlFor="session-subject">Materia</label>
                     <select
+                      id="session-subject"
                       value={newSession.subject}
                       onChange={(e) => setNewSession({ ...newSession, subject: e.target.value })}
                       className="form-select"
@@ -605,8 +607,9 @@ const TutorDashboard: React.FC = () => {
                   </div>
 
                   <div className="form-group">
-                    <label>Fecha</label>
+                    <label htmlFor="session-date">Fecha</label>
                     <input
+                      id="session-date"
                       type="date"
                       value={newSession.date}
                       onChange={(e) => setNewSession({ ...newSession, date: e.target.value })}
@@ -617,8 +620,9 @@ const TutorDashboard: React.FC = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Hora</label>
+                    <label htmlFor="session-time">Hora</label>
                     <input
+                      id="session-time"
                       type="time"
                       value={newSession.time}
                       onChange={(e) => setNewSession({ ...newSession, time: e.target.value })}
@@ -627,10 +631,11 @@ const TutorDashboard: React.FC = () => {
                   </div>
 
                   <div className="form-group">
-                    <label>Duración (minutos)</label>
+                    <label htmlFor="session-duration">Duración (minutos)</label>
                     <select
+                      id="session-duration"
                       value={newSession.duration}
-                      onChange={(e) => setNewSession({ ...newSession, duration: parseInt(e.target.value) })}
+                      onChange={(e) => setNewSession({ ...newSession, duration: Number.parseInt(e.target.value) })}
                       className="form-select"
                     >
                       <option value={30}>30 minutos</option>
@@ -643,11 +648,12 @@ const TutorDashboard: React.FC = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Precio ($)</label>
+                    <label htmlFor="session-price">Precio ($)</label>
                     <input
+                      id="session-price"
                       type="number"
                       value={newSession.price}
-                      onChange={(e) => setNewSession({ ...newSession, price: parseInt(e.target.value) })}
+                      onChange={(e) => setNewSession({ ...newSession, price: Number.parseInt(e.target.value) })}
                       className="form-input"
                       min="10000"
                       step="5000"
@@ -655,10 +661,11 @@ const TutorDashboard: React.FC = () => {
                   </div>
 
                   <div className="form-group">
-                    <label>Máximo de Estudiantes</label>
+                    <label htmlFor="max-students">Máximo de Estudiantes</label>
                     <select
+                      id="max-students"
                       value={newSession.maxStudents}
-                      onChange={(e) => setNewSession({ ...newSession, maxStudents: parseInt(e.target.value) })}
+                      onChange={(e) => setNewSession({ ...newSession, maxStudents: Number.parseInt(e.target.value) })}
                       className="form-select"
                     >
                       <option value={1}>1 estudiante</option>

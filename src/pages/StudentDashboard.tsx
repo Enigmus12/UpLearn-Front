@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import '../styles/StudentDashboard.css';
@@ -12,15 +12,17 @@ import {
 } from '../service/Api-scheduler';
 import DashboardSwitchButton from '../components/DashboardSwitchButton';
 import AddRoleButton from '../components/AddRoleButton';
+import { ENV } from '../utils/env';
 
-// Utilidades de fecha
+// Utils fecha
 function mondayOf(dateIso: string): string {
   const d = new Date(dateIso + 'T00:00:00');
-  const day = d.getDay(); // 0..6 (Domingo..Sábado)
-  const diff = (day === 0 ? -6 : 1) - day; // Lunes como inicio
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
   d.setDate(d.getDate() + diff);
   return d.toISOString().slice(0, 10);
 }
+// Suma días a una fecha ISO
 function addDays(iso: string, days: number): string {
   const d = new Date(iso + 'T00:00:00');
   d.setDate(d.getDate() + days);
@@ -57,24 +59,51 @@ interface Task {
 interface Reservation extends ApiReservation {
   tutorName?: string;
 }
-// Página principal del dashboard para estudiantes
+
+// Trae perfil público probando ?id= y luego ?sub=
+async function fetchPublicProfileByIdOrSub(
+  base: string,
+  path: string,
+  idOrSub: string,
+  token?: string
+) {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const tryQuery = async (key: 'id' | 'sub') => {
+    const url = `${base}${path}?${key}=${encodeURIComponent(idOrSub)}`;
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) return { ok: false, status: resp.status };
+    const raw = await resp.json();
+    return { ok: true, raw };
+  };
+
+  // Intento por id
+  let r = await tryQuery('id');
+  // Fallback por sub si no va
+  if (!r.ok) r = await tryQuery('sub');
+
+  if (!r.ok) throw Object.assign(new Error('PROFILE_FETCH_FAILED'), { status: r.status });
+  return r.raw;
+}
+
+// Página principal
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
-  // Token de autenticación
+
+  // Token
   const [token, setToken] = useState<string | undefined>(undefined);
-  // Actualizar token cuando cambie el estado de autenticación
   useEffect(() => {
     if (auth.isAuthenticated && auth.user) {
       const idToken = (auth.user as any)?.id_token as string | undefined;
       const accessToken = auth.user?.access_token as string | undefined;
-      const finalToken = idToken ?? accessToken;
-      setToken(finalToken);
+      setToken(idToken ?? accessToken);
     } else {
       setToken(undefined);
     }
   }, [auth.isAuthenticated, auth.user]);
-  // Obtener estado de autenticación y roles
+  // Hook de flujo de autenticación
   const { userRoles, isAuthenticated, needsRoleSelection } = useAuthFlow();
 
   // Estado general
@@ -83,10 +112,10 @@ const StudentDashboard: React.FC = () => {
   const [activeSection, setActiveSection] = useState<
     'dashboard' | 'find-tutors' | 'my-tasks' | 'post-task' | 'my-reservations'
   >('dashboard');
-  // Lista de materias para tareas
+  // Datos de búsqueda de tutores
   const subjects = ['Matemáticas', 'Física', 'Química', 'Programación', 'Inglés', 'Historia', 'Biología'];
 
-  // Búsqueda de tutores
+  // Buscar tutores
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [tutors, setTutors] = useState<TutorCard[]>([]);
   const [loadingSearch, setLoadingSearch] = useState<boolean>(false);
@@ -95,6 +124,7 @@ const StudentDashboard: React.FC = () => {
   // Reservas propias
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date().toISOString().slice(0, 10)));
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
 
   // Tareas
   const [tasks, setTasks] = useState<Task[]>([
@@ -103,7 +133,21 @@ const StudentDashboard: React.FC = () => {
   ]);
   const [newTask, setNewTask] = useState({ title: '', description: '', subject: '', dueDate: '', priority: 'medium' as const });
 
-  // Guardas y redirecciones de auth/rol
+  // Public profile API
+  const USERS_BASE = ENV.USERS_BASE;           // ej: http://localhost:8080/Api-user
+  const PROFILE_PATH = ENV.USERS_PROFILE_PATH; // ej: /public/profile
+
+  type PublicProfile = {
+    id?: string;
+    sub?: string;
+    name?: string;
+    email?: string;
+    avatarUrl?: string;
+    credentials?: string[];
+    specializations?: string[];
+  };
+
+  // Guards
   useEffect(() => {
     if (isAuthenticated === null || userRoles === null) return;
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -118,24 +162,81 @@ const StudentDashboard: React.FC = () => {
       });
     }
   }, [isAuthenticated, userRoles, needsRoleSelection, navigate, auth.user]);
+  // Perfiles cacheados por tutorId
+  const [profilesByTutorId, setProfilesByTutorId] = useState<Record<string, PublicProfile>>({});
 
-  // Cargar reservas propias
-  const loadMyReservations = useCallback(async () => {
+  // Cargar reservas
+  const loadMyReservations = async () => {
     if (!token) return;
-    const from = weekStart, to = addDays(weekStart, 6);
+    const from = weekStart;
+    const to = addDays(weekStart, 6);
     try {
-      setMyReservations(await getMyReservations(from, to, token));
+      setReservationsLoading(true);
+      const data = await getMyReservations(from, to, token);
+      setMyReservations(data);
     } catch (e: any) {
       console.error("getMyReservations falló:", e?.message || e);
       setMyReservations([]);
+    } finally {
+      setReservationsLoading(false);
     }
-  }, [token, weekStart]);
-
+  };
+  // Recargar reservas al cambiar semana o token
   useEffect(() => {
-    if (activeSection === 'my-reservations' && token) {
-      loadMyReservations();
-    }
-  }, [activeSection, loadMyReservations, token]);
+    if (activeSection !== 'my-reservations') return;
+    if (!token) return;
+    loadMyReservations();
+  }, [activeSection, token, weekStart]);
+
+  // Enriquecer con nombre/credencial/especialización del tutor
+  useEffect(() => {
+    const ids = Array.from(new Set(
+      myReservations
+        .filter(r => !r.tutorName || r.tutorName.trim() === '')
+        .map(r => (r as any).tutorId) // asegúrate que tu Reservation trae tutorId
+        .filter(Boolean) as string[]
+    )).filter(id => !profilesByTutorId[id]);
+
+    if (ids.length === 0) return;
+    // Evitar condiciones de carrera
+    let cancelled = false;
+    (async () => {
+      try {
+        const settled = await Promise.allSettled(
+          ids.map(async (idOrSub) => {
+            // Intenta ?id= y luego ?sub=, con Authorization si existe
+            const raw = await fetchPublicProfileByIdOrSub(USERS_BASE, PROFILE_PATH, idOrSub, token);
+            const prof: PublicProfile = {
+              id: raw?.id,
+              sub: raw?.sub,
+              name: raw?.name || raw?.fullName || raw?.displayName || raw?.username || raw?.email || '',
+              email: raw?.email,
+              avatarUrl: raw?.avatarUrl,
+              credentials: raw?.credentials,
+              specializations: raw?.specializations,
+            };
+            return { id: idOrSub, prof };
+          })
+        );
+
+        if (cancelled) return;
+        // Actualizar el estado con los perfiles obtenidos
+        const next: Record<string, PublicProfile> = {};
+        for (const r of settled) {
+          if (r.status === 'fulfilled') next[r.value.id] = r.value.prof;
+          // Si falla (403/404/500), lo ignoramos y dejamos placeholders
+        }
+        if (Object.keys(next).length > 0) {
+          setProfilesByTutorId(prev => ({ ...prev, ...next }));
+        }
+      } catch (e) {
+        // No romper la UI por un 403
+        console.warn('Enriquecimiento de perfiles fallido', e);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [myReservations, profilesByTutorId, USERS_BASE, PROFILE_PATH, token]);
 
   // Buscar tutores
   const handleSearchTutors = async (e?: React.FormEvent) => {
@@ -150,14 +251,6 @@ const StudentDashboard: React.FC = () => {
     } finally {
       setLoadingSearch(false);
     }
-  };
-
-
-  // Navegar a página de reserva
-  const goToBookTutor = (tutor: TutorCard) => {
-    const id = tutor.userId || (tutor as any).sub;
-    if (!id) return alert('No se pudo identificar al tutor');
-    navigate(`/book/${encodeURIComponent(id)}`, { state: { tutor, role: 'tutor' } });
   };
 
   // Cancelar reserva propia
@@ -304,8 +397,8 @@ const StudentDashboard: React.FC = () => {
 
                     {Array.isArray(tutor.specializations) && tutor.specializations.length > 0 && (
                       <div className="tutor-tags">
-                        {tutor.specializations.map((s: string, idx: number) => (
-                          <span key={idx} className="tag">{s}</span>
+                        {tutor.specializations.map((s: string) => (
+                          <span key={s} className="tag">{s}</span>
                         ))}
                       </div>
                     )}
@@ -352,58 +445,75 @@ const StudentDashboard: React.FC = () => {
                 <button className='btn btn-ghost' onClick={() => setWeekStart(addDays(weekStart, 7))}>Siguiente Semana &raquo;</button>
               </div>
 
-              {myReservations.length === 0 && (
-        <div className="empty-note">No tienes reservas esta semana.</div>
-      )}
+              {reservationsLoading && (
+                <div className="empty-note">Cargando reservas…</div>
+              )}
 
-      <div className="reservations-list">
-        {myReservations.map((r) => {
-          // Normalizamos estado -> color
-          const s = (r.status || '').toUpperCase();
-          const status =
-            s.includes('CANCEL') ? { label: 'CANCELADO', color: '#ef4444', bg: 'rgba(239,68,68,.12)' } :
-            s.includes('ACTIV')  ? { label: 'ACTIVA',     color: '#f59e0b', bg: 'rgba(245,158,11,.12)' } :
-            s.includes('ACEPT') || s.includes('CONFIRM')
-                                 ? { label: 'CONFIRMADA', color: '#10b981', bg: 'rgba(16,185,129,.12)' } :
-                                   { label: r.status || '—', color: '#6b7280', bg: 'rgba(107,114,128,.12)' };
+              {!reservationsLoading && myReservations.length === 0 && (
+                <div className="empty-note">No tienes reservas esta semana.</div>
+              )}
 
-          const tutorName = r.tutorName && r.tutorName.trim() ? r.tutorName : 'Tutor';
+              <div className="reservations-list">
+                {myReservations.map((r) => {
+                  const s = (r.status || '').toUpperCase();
+                  let status;
+                  if (s.includes('CANCEL')) {
+                    status = { label: 'CANCELADO', color: '#ef4444', bg: 'rgba(239,68,68,.12)' };
+                  } else if (s.includes('ACTIV')) {
+                    status = { label: 'ACTIVA', color: '#f59e0b', bg: 'rgba(245,158,11,.12)' };
+                  } else if (s.includes('ACEPT') || s.includes('CONFIRM')) {
+                    status = { label: 'CONFIRMADA', color: '#10b981', bg: 'rgba(16,185,129,.12)' };
+                  } else {
+                    status = { label: r.status || '—', color: '#6b7280', bg: 'rgba(107,114,128,.12)' };
+                  }
 
-          return (
-            <article key={r.id} className="reservation-card" tabIndex={0}>
-              <header className="reservation-card__header">
-                <h3 className="reservation-card__title">
-                  Reserva con {tutorName}
-                </h3>
-                <span
-                  className="status-pill"
-                  style={{ color: status.color, background: status.bg }}
-                >
-                  {status.label}
-                </span>
-              </header>
+                  const prof = profilesByTutorId[(r as any).tutorId];
+                  const tutorName =
+                    (r as any).tutorName?.trim() ||
+                    prof?.name?.trim() ||
+                    'Tutor';
 
-              <div className="reservation-card__meta">
-                <span>🗓️ {r.date}</span>
-                <span>⏰ {r.start.slice(0, 5)} – {r.end.slice(0, 5)}</span>
+                  const creds = (r as any).tutorCredentials || (r as any).credentials || prof?.credentials;
+                  const specs = (r as any).tutorSpecializations || (r as any).specializations || prof?.specializations;
+
+                  const credential = Array.isArray(creds) ? (creds[0] || '') : (creds || '');
+                  const specialization = Array.isArray(specs) ? (specs[0] || '') : (specs || '');
+
+                  return (
+                    <article key={r.id} className="reservation-card">
+                      <header className="reservation-card__header">
+                        <h3 className="reservation-card__title">Reserva con {tutorName}</h3>
+                        <span className="status-pill" style={{ color: status.color, background: status.bg }}>
+                          {status.label}
+                        </span>
+                      </header>
+
+                      <div className="reservation-card__tutorline">
+                        <span className="soft-badge">🎓 {credential || '—'}</span>
+                        <span className="soft-badge">🏷️ {specialization || '—'}</span>
+                      </div>
+
+                      <div className="reservation-card__meta">
+                        <span>🗓️ {r.date}</span>
+                        <span>⏰ {r.start.slice(0, 5)} – {r.end.slice(0, 5)}</span>
+                      </div>
+
+                      <div className="reservation-card__actions">
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={() => cancelTutorReservation(r.id)}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
-
-              <div className="reservation-card__actions">
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  onClick={() => cancelTutorReservation(r.id)}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </article>
-          );
-        })}
-
-      </div>
-    </div>
-          </div>)}
+            </div>
+          </div>
+        )}
 
         {activeSection === 'my-tasks' && (
           <div className="tasks-section">
@@ -443,8 +553,9 @@ const StudentDashboard: React.FC = () => {
             <div className="task-form-container">
               <div className="task-form">
                 <div className="form-group">
-                  <label>Título de la Tarea</label>
+                  <label htmlFor="task-title">Título de la Tarea</label>
                   <input
+                    id="task-title"
                     type="text"
                     value={newTask.title}
                     onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
@@ -453,8 +564,9 @@ const StudentDashboard: React.FC = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Descripción</label>
+                  <label htmlFor="task-description">Descripción</label>
                   <textarea
+                    id="task-description"
                     value={newTask.description}
                     onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
                     placeholder="Describe detalladamente lo que necesitas..."
@@ -464,8 +576,9 @@ const StudentDashboard: React.FC = () => {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Materia</label>
+                    <label htmlFor="task-subject">Materia</label>
                     <select
+                      id="task-subject"
                       value={newTask.subject}
                       onChange={(e) => setNewTask({ ...newTask, subject: e.target.value })}
                       className="form-select"
@@ -475,8 +588,9 @@ const StudentDashboard: React.FC = () => {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>Fecha Límite</label>
+                    <label htmlFor="task-due-date">Fecha Límite</label>
                     <input
+                      id="task-due-date"
                       type="date"
                       value={newTask.dueDate}
                       onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
@@ -484,25 +598,29 @@ const StudentDashboard: React.FC = () => {
                     />
                   </div>
                 </div>
-                <div className="form-group">
-                  <label>Prioridad</label>
+                <fieldset className="form-group">
+                  <legend>Prioridad</legend>
                   <div className="priority-options">
-                    {['low', 'medium', 'high'].map(priority => (
-                      <label key={priority} className="priority-option">
-                        <input
-                          type="radio"
-                          name="priority"
-                          value={priority}
-                          checked={newTask.priority === priority}
-                          onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as any })}
-                        />
-                        <span className="priority-label" style={{ color: getPriorityColor(priority) }}>
-                          {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                        </span>
-                      </label>
-                    ))}
+                    {['low', 'medium', 'high'].map(priority => {
+                      const radioId = `priority-radio-${priority}`;
+                      return (
+                        <label key={priority} className="priority-option" htmlFor={radioId}>
+                          <input
+                            id={radioId}
+                            type="radio"
+                            name="priority"
+                            value={priority}
+                            checked={newTask.priority === priority}
+                            onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as any })}
+                          />
+                          <span className="priority-label" style={{ color: getPriorityColor(priority) }}>
+                            {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
-                </div>
+                </fieldset>
                 <div className="form-actions">
                   <button className="btn-primary btn-large" onClick={handlePostTask}>Publicar Tarea</button>
                   <button

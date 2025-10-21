@@ -1,4 +1,4 @@
-import React, { useMemo, useRef} from 'react';
+import React, { useMemo, useRef } from 'react';
 import '../styles/Calendar.css';
 import type { ScheduleCell, CellStatus } from '../service/Api-scheduler';
 
@@ -15,11 +15,17 @@ export interface WeekCalendarProps {
   onNextWeek?: () => void;
   onClear?: () => void;
 }
-
+function toHHMM(h: string) {
+  const s = (h ?? '').trim();
+  const regex = /^(\d{1,2}):(\d{2})/;
+  const m = regex.exec(s);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : s.slice(0, 5);
+}
 function addDays(iso: string, days: number): string {
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0,10);
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10); // seguro en UTC
 }
 
 function hours(): string[] {
@@ -33,9 +39,9 @@ function hours(): string[] {
 function classForStatus(status: CellStatus | undefined | null): string {
   switch (status) {
     case 'DISPONIBLE': return 'cell available';
-    case 'ACTIVA':     return 'cell active';
-    case 'ACEPTADO':   return 'cell accepted';
-    case 'CANCELADO':  return 'cell canceled';
+    case 'ACTIVA': return 'cell active';
+    case 'ACEPTADO': return 'cell accepted';
+    case 'CANCELADO': return 'cell canceled';
     default: return 'cell disabled';
   }
 }
@@ -43,9 +49,9 @@ function classForStatus(status: CellStatus | undefined | null): string {
 function getStatusLabel(status: CellStatus | undefined | null): string {
   switch (status) {
     case 'DISPONIBLE': return 'Disponible';
-    case 'ACTIVA':     return 'Activa';
-    case 'ACEPTADO':   return 'Aceptada';
-    case 'CANCELADO':  return 'Cancelada';
+    case 'ACTIVA': return 'Activa';
+    case 'ACEPTADO': return 'Aceptada';
+    case 'CANCELADO': return 'Cancelada';
     default: return '';
   }
 }
@@ -56,31 +62,49 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
   weekStart, cells, mode, selectedKeys, onToggle, onSinglePick, onPrevWeek, onNextWeek, onClear
 }) => {
   const days = useMemo(() => {
-    return Array.from({length: 7}, (_, i) => addDays(weekStart, i));
+    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   }, [weekStart]);
 
   const map = useMemo(() => {
+    // prioridad sin incluir null como clave
+    const priority: Record<Exclude<CellStatus, null>, number> = {
+      ACEPTADO: 4,
+      ACTIVA: 3,
+      DISPONIBLE: 2,
+      CANCELADO: 1,
+    };
+    const pr = (s: CellStatus | null | undefined) => (s ? priority[s] ?? 0 : 0);
+
     const m = new Map<string, ScheduleCell>();
     for (const c of cells || []) {
-      m.set(`${c.date}_${c.hour}`, c);
+      const hhmm = toHHMM(c.hour);
+      const key = `${c.date}_${hhmm}`;
+      const next = { ...c, hour: hhmm };
+      const prev = m.get(key);
+      const pPrev = pr(prev?.status);
+      const pNext = pr(next.status);
+      if (!prev || pNext >= pPrev) m.set(key, next);
     }
     return m;
   }, [cells]);
 
+
+
   const mouseDown = useRef(false);
-  const paintMode = useRef<'select' | 'deselect' | null>(null); // Modo de pintura: agregar o quitar
-  const processedInDrag = useRef<Set<string>>(new Set()); // Celdas procesadas en este arrastre
+  const paintMode = useRef<'select' | 'deselect' | null>(null);
+  const processedInDrag = useRef<Set<string>>(new Set());
 
   const handleDown = (key: string, cell: ScheduleCell) => {
     if (mode !== 'tutor' || !onToggle) return;
 
+    // IMPORTANTE: Reiniciar el estado de arrastre completamente
     mouseDown.current = true;
-    processedInDrag.current = new Set();
-    
+    processedInDrag.current = new Set(); // Limpiar las celdas procesadas del arrastre anterior
+
     // Determinar el modo de pintura basado en si la celda está seleccionada
     const isCurrentlySelected = selectedKeys?.has(key) || false;
     paintMode.current = isCurrentlySelected ? 'deselect' : 'select';
-    
+
     // Aplicar toggle a la primera celda
     processedInDrag.current.add(key);
     onToggle(key, cell);
@@ -88,23 +112,24 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
 
   const handleEnter = (key: string, cell: ScheduleCell) => {
     if (!mouseDown.current || mode !== 'tutor' || !onToggle) return;
-    
+
     // Si ya procesamos esta celda en este arrastre, no hacer nada
     if (processedInDrag.current.has(key)) return;
-    
+
     processedInDrag.current.add(key);
-    
-    // Aplicar toggle solo si el estado actual coincide con el modo de pintura
+
+    // Aplicar toggle basado en el modo de pintura establecido al inicio del drag
     const isCurrentlySelected = selectedKeys?.has(key) || false;
-    
+
+    // Solo aplicar toggle si el estado actual de la celda necesita cambiar según el paintMode
     if ((paintMode.current === 'select' && !isCurrentlySelected) ||
-        (paintMode.current === 'deselect' && isCurrentlySelected)) {
-      // En modo 'select' añadimos si no está seleccionada; en 'deselect' quitamos si está seleccionada
+      (paintMode.current === 'deselect' && isCurrentlySelected)) {
       onToggle(key, cell);
     }
   };
 
   const handleUp = () => {
+    // CRÍTICO: Limpiar el estado completamente cuando se suelta el mouse
     mouseDown.current = false;
     paintMode.current = null;
     processedInDrag.current.clear();
@@ -155,34 +180,28 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     );
   };
 
-  return (
-    <div 
-      className="calendar-wrapper" 
-      role="group"
-      aria-label="Week calendar"
-      tabIndex={0}
-      onMouseLeave={() => {
-        mouseDown.current = false;
-        paintMode.current = null;
-        processedInDrag.current.clear();
-      }}
-      onMouseUp={handleUp}
-      onTouchEnd={handleUp}
-      onKeyDown={(e) => {
-        // Support keyboard users: Esc ends any drag/paint operation
-        if (e.key === 'Escape' || e.key === 'Esc') {
-          handleUp();
-        }
-      }}
-    >
-      <div className="calendar-toolbar">
-        <button className="nav-btn" onClick={onPrevWeek}>&laquo;</button>
-        <div className="calendar-title">
-          Semana {days[0]} &mdash; {days[6]}
-        </div>
-        <button className="nav-btn" onClick={onNextWeek}>&raquo;</button>
-      </div>
+  // IMPORTANTE: Agregar listeners globales para asegurar que handleUp siempre se ejecute
+  React.useEffect(() => {
+    const globalHandleUp = () => {
+      if (mouseDown.current) {
+        handleUp();
+      }
+    };
 
+    globalThis.addEventListener('mouseup', globalHandleUp);
+    globalThis.addEventListener('touchend', globalHandleUp);
+
+    return () => {
+      globalThis.removeEventListener('mouseup', globalHandleUp);
+      globalThis.removeEventListener('touchend', globalHandleUp);
+    };
+  }, []);
+
+  return (
+    <fieldset
+      className="calendar-wrapper"
+      aria-label="Week calendar"
+    >
       <div className="calendar-grid">
         <div className="col hour-col">
           <div className="head-cell">Hora</div>
@@ -191,12 +210,12 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
 
         {days.map((d, idx) => (
           <div key={d} className="col">
-            <div className="head-cell">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'][idx]}<br/>{d}</div>
+            <div className="head-cell">{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][idx]}<br />{d}</div>
             {H_LIST.map(h => renderCell(d, h))}
           </div>
         ))}
       </div>
-    </div>
+    </fieldset>
   );
 };
 

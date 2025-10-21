@@ -24,12 +24,20 @@ export interface Reservation {
   updatedAt?: string;
   // Enriquecidos desde backend (si existen):
   studentName?: string;
+  studentAvatar?: string;
   tutorName?: string;
+  tutorAvatar?: string;
 }
 
 const DEFAULT_BASE = 'http://localhost:8090';
 const BASE = (process.env.REACT_APP_SCHEDULER_API_BASE || DEFAULT_BASE).replace(/\/$/, '');
-
+function norm(h: string) {
+  const s = (h ?? '').trim();
+  const regex = /^(\d{1,2}):(\d{2})/; // acepta H:mm o HH:mm (y HH:mm:ss)
+  const m = regex.exec(s);
+  if (!m) return s.slice(0, 5);
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
+}
 function headers(token?: string) {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) h['Authorization'] = `Bearer ${token}`;
@@ -51,11 +59,39 @@ async function handle(res: Response) {
 }
 
 /** Grid semanal público de un tutor */
-export async function getScheduleForTutor(tutorId: string, weekStart: string, token?: string): Promise<ScheduleCell[]> {
+export async function getScheduleForTutor(
+  tutorId: string,
+  weekStart: string,
+  token?: string
+): Promise<ScheduleCell[]> {
   const url = `${BASE}/api/schedule/tutor/${encodeURIComponent(tutorId)}?weekStart=${weekStart}`;
   const res = await fetch(url, { method: 'GET', headers: headers(token) });
-  return handle(res);
+  const raw = (await handle(res)) as ScheduleCell[];
+
+  // Prioridad sin usar `null` como clave
+  const priority: Record<Exclude<CellStatus, null>, number> = {
+    ACEPTADO: 4,
+    ACTIVA: 3,
+    DISPONIBLE: 2,
+    CANCELADO: 1,
+  };
+  const pr = (s: CellStatus | null | undefined) => (s ? priority[s] ?? 0 : 0);
+
+  // Dedupe por date+hour (mantiene el estado de mayor prioridad)
+  const byKey = new Map<string, ScheduleCell>();
+  for (const c of raw) {
+    const hhmm = norm(c.hour);
+    const key = `${c.date}_${hhmm}`;
+    const curr = byKey.get(key);
+    const pCurr = pr(curr?.status);
+    const pNext = pr(c?.status);
+    if (!curr || pNext >= pCurr) {
+      byKey.set(key, { ...c, hour: hhmm });
+    }
+  }
+  return Array.from(byKey.values());
 }
+
 
 /** Crear reserva (estudiante) */
 export async function createReservation(tutorId: string, date: string, hour: string, token?: string): Promise<Reservation> {
@@ -104,23 +140,20 @@ export async function replaceDayAvailability(date: string, hours: string[], toke
 }
 
 /** NUEVA: Agregar disponibilidad sin eliminar existente (tutor) */
-export async function addAvailability(date: string, hours: string[], token?: string): Promise<void> {
+export async function addAvailability(date: string, hours: string[], token?: string):
+  Promise<{ addedCount: number; requestedCount: number; date: string; message: string; }> {
   const url = `${BASE}/api/availability/add`;
-  const res = await fetch(url, { 
-    method: 'POST', 
-    headers: headers(token), 
-    body: JSON.stringify({ date, hours }) 
-  });
-  await handle(res);
+  const res = await fetch(url, { method: 'POST', headers: headers(token), body: JSON.stringify({ date, hours }) });
+  return handle(res);
 }
 
 /** NUEVA: Eliminar slots específicos de disponibilidad (tutor) */
 export async function deleteAvailabilitySlots(slotIds: string[], token?: string): Promise<void> {
   const url = `${BASE}/api/availability/delete-batch`;
-  const res = await fetch(url, { 
-    method: 'DELETE', 
-    headers: headers(token), 
-    body: JSON.stringify({ slotIds }) 
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: headers(token),
+    body: JSON.stringify({ slotIds })
   });
   await handle(res);
 }
@@ -144,5 +177,6 @@ export async function bulkAvailability(req: BulkAvailabilityRequest, token?: str
 export async function getPublicAvailabilityForTutor(tutorId: string, weekStart: string, token?: string): Promise<ScheduleCell[]> {
   const url = `${BASE}/api/availability/tutor/${encodeURIComponent(tutorId)}?weekStart=${weekStart}`;
   const res = await fetch(url, { method: 'GET', headers: headers(token) });
-  return handle(res);
+  const data = await handle(res);
+  return data.map((c: ScheduleCell) => ({ ...c, hour: norm(c.hour) }));
 }
