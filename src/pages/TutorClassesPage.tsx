@@ -8,6 +8,7 @@ import {
 } from '../service/Api-scheduler';
 import '../styles/TutorDashboard.css';
 import { ENV } from '../utils/env';
+/** Formatea fecha ISO a dd/mm/yyyy */
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -17,8 +18,8 @@ function formatTime(timeStr: string): string {
 }
 
 // Configuración de endpoints de usuario
-const USERS_BASE = ENV.USERS_BASE;                 // p.ej. http://localhost:8080/Api-user
-const PROFILE_PATH = ENV.USERS_PROFILE_PATH;       // p.ej. /public/profile
+const USERS_BASE = ENV.USERS_BASE;           // p.ej. http://localhost:8080/Api-user
+const PROFILE_PATH = ENV.USERS_PROFILE_PATH; // p.ej. /public/profile
 
 // Perfil público mínimo
 type PublicProfile = {
@@ -28,6 +29,7 @@ type PublicProfile = {
   email?: string;
   avatarUrl?: string;
 };
+
 // Grupo de reservas por estudiante
 type StudentGroup = {
   studentId: string;
@@ -35,19 +37,22 @@ type StudentGroup = {
   studentAvatar?: string;
   reservations: Reservation[];
 };
+
 // Página de gestión de clases del tutor
 const TutorClassesPage: React.FC = () => {
   const auth = useAuth();
   const token = (auth.user as any)?.id_token ?? auth.user?.access_token;
+
   // Estado de reservas
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] =
-    useState<'all' | 'ACTIVA' | 'ACEPTADO' | 'CANCELADO'>('all');
+    useState<'all' | 'PENDIENTE' | 'ACEPTADO' | 'CANCELADO'>('all');
 
   // Caché en memoria de perfiles por id
   const [profilesById, setProfilesById] = useState<Record<string, PublicProfile>>({});
+
   // Cargar reservas
   const load = useCallback(async () => {
     if (!token) {
@@ -62,10 +67,10 @@ const TutorClassesPage: React.FC = () => {
       from.setDate(from.getDate() - 30);
       const to = new Date(today);
       to.setDate(to.getDate() + 60);
-      //  Formatear a YYYY-MM-DD
+
       const fromStr = from.toISOString().slice(0, 10);
       const toStr = to.toISOString().slice(0, 10);
-      // Obtener reservas
+
       const data = await getTutorReservations(fromStr, toStr, token);
       setReservations(data);
       setMessage(data.length === 0 ? 'ℹ️ No tienes clases programadas' : null);
@@ -77,8 +82,9 @@ const TutorClassesPage: React.FC = () => {
       setLoading(false);
     }
   }, [token]);
-  // Cargar reservas al montar
+
   useEffect(() => { load(); }, [load]);
+
   // Aceptar clase
   const handleAccept = async (reservationId: string) => {
     if (!token) return;
@@ -91,6 +97,7 @@ const TutorClassesPage: React.FC = () => {
       setMessage('❌ ' + (e.message || 'Error aceptando clase'));
     }
   };
+
   // Cancelar clase
   const handleCancel = async (reservationId: string) => {
     if (!token) return;
@@ -103,51 +110,50 @@ const TutorClassesPage: React.FC = () => {
       setMessage('❌ ' + (e.message || 'Error cancelando clase'));
     }
   };
-  // Colores y textos de estado
-  const getStatusColor = (status: string) => {
+
+  // === Helpers: colores/textos seguros ante null ===
+  const getStatusColor = (status?: string | null) => {
     switch (status) {
-      case 'ACTIVA': return '#F59E0B';
+      case 'PENDIENTE': return '#F59E0B';
       case 'ACEPTADO': return '#10B981';
       case 'CANCELADO': return '#EF4444';
       default: return '#6B7280';
     }
   };
-  const getStatusText = (status: string) => {
+  const getStatusText = (status?: string | null) => {
     switch (status) {
-      case 'ACTIVA': return 'PENDIENTE';
+      case 'PENDIENTE': return 'PENDIENTE';
       case 'ACEPTADO': return 'ACEPTADA';
       case 'CANCELADO': return 'CANCELADA';
-      default: return status;
+      default: return '—';
     }
   };
+
   // Filtrar reservas según estado
   const filteredReservations =
     filterStatus === 'all' ? reservations : reservations.filter(r => r.status === filterStatus);
 
-  // Enriquecimiento en cliente: traer perfiles (si no están en caché) por cada studentId único 
+  // Enriquecimiento en cliente: traer perfiles por studentId único
   useEffect(() => {
-    // Tomamos TODOS los studentId presentes en la vista actual (sin depender de si viene o no nombre)
     const idsToFetch = Array.from(
-      new Set(filteredReservations.map(r => r.studentId))
-    ).filter(id => !!id && !profilesById[id]); // sólo los que no están en caché
-    // Si no hay IDs para buscar, salir
+      new Set(filteredReservations.map(r => r.studentId).filter(Boolean as unknown as (id: string | undefined) => id is string))
+    ).filter(id => !profilesById[id]);
+
     if (idsToFetch.length === 0) return;
 
     let cancelled = false;
-    // Hacer fetch de perfiles públicos
     (async () => {
       try {
         const results = await Promise.allSettled(
           idsToFetch.map(async (id) => {
             const url = `${USERS_BASE}${PROFILE_PATH}?sub=${encodeURIComponent(id)}&id=${encodeURIComponent(id)}`;
 
-            //  si hay token, lo mandamos; si el endpoint era realmente público, lo ignora
             const headers: Record<string, string> = { Accept: 'application/json' };
             if (token) headers.Authorization = `Bearer ${token}`;
-            //  si hay token, lo mandamos; si el endpoint era realmente público, lo ignora  
-            const resp = await fetch(url, { headers });   // credentials: 'omit' (por defecto)
+
+            const resp = await fetch(url, { headers });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            //  si hay token, lo mandamos; si el endpoint era realmente público, lo ignora
+
             const raw = await resp.json();
             return {
               id,
@@ -157,14 +163,13 @@ const TutorClassesPage: React.FC = () => {
                 name: raw?.name || raw?.fullName || raw?.displayName || raw?.username || raw?.email || '',
                 email: raw?.email,
                 avatarUrl: raw?.avatarUrl,
-              },
+              } as PublicProfile,
             };
           })
         );
 
-        // Si el efecto fue cancelado, no hacer nada
         if (cancelled) return;
-        // Construir mapa de id → perfil
+        // extraer los perfiles resueltos
         const next: Record<string, PublicProfile> = {};
         for (const r of results) {
           if (r.status === 'fulfilled') next[r.value.id] = r.value.profile;
@@ -173,25 +178,22 @@ const TutorClassesPage: React.FC = () => {
           setProfilesById(prev => ({ ...prev, ...next }));
         }
       } catch (e) {
-        // silencioso: si falla, mantenemos el fallback “Estudiante”
         console.warn('No se pudieron enriquecer perfiles públicos', e);
       }
     })();
-    // Cleanup por si cambia filteredReservations antes de completar fetch
+
     return () => { cancelled = true; };
-  }, [filteredReservations, profilesById, USERS_BASE, PROFILE_PATH]);
+  }, [filteredReservations, profilesById, token]);
 
-
-  // Agrupar por estudiante con “ascenso” de nombre/avatar (reserva o perfil público)
+  // Agrupar por estudiante (ascenso de nombre/avatar)
   const studentGroups = useMemo(() => {
     const acc: Record<string, StudentGroup> = {};
-    // Recorremos las reservas filtradas
     for (const res of filteredReservations) {
-      const key = res.studentId;
+      const key = res.studentId || 'desconocido';
       const p = profilesById[key];
       const name = (res.studentName?.trim()) || (p?.name?.trim());
       const avatar = res.studentAvatar ?? p?.avatarUrl;
-      // Si ya existe el grupo, hacer “ascenso” de datos si es necesario
+
       if (acc[key]) {
         if ((!acc[key].studentName || acc[key].studentName === 'Estudiante') && name) {
           acc[key].studentName = name;
@@ -201,7 +203,7 @@ const TutorClassesPage: React.FC = () => {
         }
       } else {
         acc[key] = {
-          studentId: res.studentId,
+          studentId: key,
           studentName: name || 'Estudiante',
           studentAvatar: avatar,
           reservations: []
@@ -215,7 +217,7 @@ const TutorClassesPage: React.FC = () => {
   // stats
   const stats = {
     total: reservations.length,
-    pending: reservations.filter(r => r.status === 'ACTIVA').length,
+    pending: reservations.filter(r => r.status === 'PENDIENTE').length,
     accepted: reservations.filter(r => r.status === 'ACEPTADO').length,
     cancelled: reservations.filter(r => r.status === 'CANCELADO').length,
   };
@@ -281,7 +283,7 @@ const TutorClassesPage: React.FC = () => {
         padding: '12px', background: '#F9FAFB', borderRadius: '8px', border: '1px solid #E5E7EB'
       }}>
         <span style={{ fontWeight: 600, marginRight: '8px', alignSelf: 'center' }}>Filtrar:</span>
-        {(['all', 'ACTIVA', 'ACEPTADO', 'CANCELADO'] as const).map(status => (
+        {(['all', 'PENDIENTE', 'ACEPTADO', 'CANCELADO'] as const).map(status => (
           <button
             key={status}
             className={`btn-modern ${filterStatus === status ? 'btn-primary-modern' : 'btn-secondary-modern'}`}
@@ -340,50 +342,55 @@ const TutorClassesPage: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {sortedReservations.map(res => (
-                    <div key={res.id}
-                      style={{
-                        display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '16px', alignItems: 'center',
-                        padding: '12px', background: '#F9FAFB', borderRadius: '8px', border: '1px solid #E5E7EB'
-                      }}>
-                      <div>
-                        <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }}>
-                          📅 {formatDate(res.date)} • 🕐 {formatTime(res.start)} - {formatTime(res.end)}
-                        </p>
-                        <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
-                          ID: {res.id.slice(0, 8)}...
-                        </p>
-                      </div>
+                  {sortedReservations.map(res => {
+                    const color = getStatusColor(res.status);
+                    const bg = `${color}15`;
 
-                      <div>
-                        <span className="status-badge"
-                          style={{
-                            color: getStatusColor(res.status), fontWeight: 700, fontSize: '12px',
-                            padding: '4px 12px', background: `${getStatusColor(res.status)}15`, borderRadius: '999px'
-                          }}>
-                          {getStatusText(res.status)}
-                        </span>
-                      </div>
+                    return (
+                      <div key={res.id}
+                        style={{
+                          display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '16px', alignItems: 'center',
+                          padding: '12px', background: '#F9FAFB', borderRadius: '8px', border: '1px solid #E5E7EB'
+                        }}>
+                        <div>
+                          <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }}>
+                            📅 {formatDate(res.date)} • 🕐 {formatTime(res.start)} - {formatTime(res.end)}
+                          </p>
+                          <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+                            ID: {res.id.slice(0, 8)}...
+                          </p>
+                        </div>
 
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        {res.status === 'ACTIVA' && (
-                          <>
-                            <button className="btn btn-primary" onClick={() => handleAccept(res.id)}
-                              style={{ fontSize: '13px', padding: '6px 12px', height: '36px' }}>✓ Aceptar</button>
+                        <div>
+                          <span className="status-badge"
+                            style={{
+                              color, fontWeight: 700, fontSize: '12px',
+                              padding: '4px 12px', background: bg, borderRadius: '999px'
+                            }}>
+                            {getStatusText(res.status)}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          {res.status === 'PENDIENTE' && (
+                            <>
+                              <button className="btn btn-primary" onClick={() => handleAccept(res.id)}
+                                style={{ fontSize: '13px', padding: '6px 12px', height: '36px' }}>✓ Aceptar</button>
+                              <button className="btn btn-danger" onClick={() => handleCancel(res.id)}
+                                style={{ fontSize: '13px', padding: '6px 12px', height: '36px', marginTop: '8px' }}>✗ Cancelar</button>
+                            </>
+                          )}
+                          {res.status === 'ACEPTADO' && (
                             <button className="btn btn-danger" onClick={() => handleCancel(res.id)}
-                              style={{ fontSize: '13px', padding: '6px 12px', height: '36px', marginTop: '8px' }}>✗ Cancelar</button>
-                          </>
-                        )}
-                        {res.status === 'ACEPTADO' && (
-                          <button className="btn btn-danger" onClick={() => handleCancel(res.id)}
-                            style={{ fontSize: '13px', padding: '6px 12px', height: '36px' }}>Cancelar</button>
-                        )}
-                        {res.status === 'CANCELADO' && (
-                          <span style={{ fontSize: '13px', color: '#9CA3AF' }}>Clase cancelada</span>
-                        )}
+                              style={{ fontSize: '13px', padding: '6px 12px', height: '36px' }}>Cancelar</button>
+                          )}
+                          {res.status === 'CANCELADO' && (
+                            <span style={{ fontSize: '13px', color: '#9CA3AF' }}>Clase cancelada</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );

@@ -2,27 +2,35 @@
  * API client for the student-tutor-scheduler microservice (sin gateway).
  * Puedes sobreescribir con REACT_APP_SCHEDULER_API_BASE.
  */
-export type CellStatus = 'DISPONIBLE' | 'ACTIVA' | 'ACEPTADO' | 'CANCELADO' | null;
+
+export type CellStatus =
+  | 'DISPONIBLE'
+  | 'PENDIENTE'  
+  | 'ACEPTADO'
+  | 'CANCELADO'
+  | 'VENCIDA'     
+  | 'ACTIVA'     
+  | null;
 
 export interface ScheduleCell {
   date: string;      // YYYY-MM-DD
   hour: string;      // HH:mm (24h)
-  status: CellStatus;// 'DISPONIBLE' | 'ACTIVA' | 'ACEPTADO' | 'CANCELADO' | null
+  status: CellStatus;
   reservationId?: string | null;
   studentId?: string | null;
 }
-
+/** Reserva */
 export interface Reservation {
   id: string;
   tutorId: string;
   studentId: string;
-  date: string;      // ISO date
-  start: string;     // HH:mm:ss
-  end: string;       // HH:mm:ss
-  status: 'ACTIVA' | 'ACEPTADO' | 'CANCELADO';
+  date: string;      // YYYY-MM-DD
+  start: string;     // HH:mm[:ss]
+  end: string;       // HH:mm[:ss]
+  status: CellStatus; // mismo conjunto de estados
   createdAt?: string;
   updatedAt?: string;
-  // Enriquecidos desde backend (si existen):
+  // Enriquecidos desde backend (si existen)
   studentName?: string;
   studentAvatar?: string;
   tutorName?: string;
@@ -31,22 +39,20 @@ export interface Reservation {
 
 const DEFAULT_BASE = 'http://localhost:8090';
 const BASE = (process.env.REACT_APP_SCHEDULER_API_BASE || DEFAULT_BASE).replace(/\/$/, '');
+
+/* ===== utilidades internas ===== */
 function norm(h: string) {
   const s = (h ?? '').trim();
-  const regex = /^(\d{1,2}):(\d{2})/; // acepta H:mm o HH:mm (y HH:mm:ss)
-  const m = regex.exec(s);
-  if (!m) return s.slice(0, 5);
-  return `${m[1].padStart(2, '0')}:${m[2]}`;
+  const m = /^(\d{1,2}):(\d{2})/.exec(s);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : s.slice(0, 5);
 }
 function headers(token?: string) {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) h['Authorization'] = `Bearer ${token}`;
+  if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
-
 async function handle(res: Response) {
   if (!res.ok) {
-    // Intenta parsear JSON de error de Spring
     let body: any = null;
     try { body = await res.json(); } catch { body = await res.text().catch(() => null); }
     const msg = typeof body === 'string'
@@ -58,7 +64,32 @@ async function handle(res: Response) {
   return res.json();
 }
 
-/** Grid semanal público de un tutor */
+/* ===== fechas ===== */
+function slotToLocalDate(dateISO: string, hhmm: string): Date {
+  const [H, M] = norm(hhmm).split(':').map(Number);
+  const dt = new Date(`${dateISO}T00:00:00`);
+  dt.setHours(H, M, 0, 0);
+  return dt;
+}
+function isPastSlot(dateISO: string, hhmm: string): boolean {
+  const now = new Date();
+  now.setSeconds(0, 0);
+  return slotToLocalDate(dateISO, hhmm).getTime() < now.getTime();
+}
+
+/* ===== normalizaciones ===== */
+function normalizeCellStatus(s: CellStatus | null | undefined): Exclude<CellStatus, 'ACTIVA'> | null {
+  if (s === 'ACTIVA') return 'PENDIENTE';
+  return (s ?? null) as any;
+}
+function normalizeReservationStatus(s: CellStatus | null | undefined): CellStatus {
+  if (s === 'ACTIVA') return 'PENDIENTE';
+  return (s ?? null) as CellStatus;
+}
+
+/* ===== API ===== */
+
+/** Grid semanal (tutor, completo) con normalización de estados */
 export async function getScheduleForTutor(
   tutorId: string,
   weekStart: string,
@@ -68,115 +99,148 @@ export async function getScheduleForTutor(
   const res = await fetch(url, { method: 'GET', headers: headers(token) });
   const raw = (await handle(res)) as ScheduleCell[];
 
-  // Prioridad sin usar `null` como clave
+  // normalizamos: ACTIVA a PENDIENTE, unificamos por (date,hour) quedándonos con el de mayor prioridad
   const priority: Record<Exclude<CellStatus, null>, number> = {
     ACEPTADO: 4,
+    PENDIENTE: 3,   
     ACTIVA: 3,
     DISPONIBLE: 2,
     CANCELADO: 1,
+    VENCIDA: 0,     
   };
-  const pr = (s: CellStatus | null | undefined) => (s ? priority[s] ?? 0 : 0);
-
-  // Dedupe por date+hour (mantiene el estado de mayor prioridad)
+  const pr = (s: CellStatus | null | undefined) => (s ? (priority[s] ?? 0) : 0);
+  // mapeo intermedio por clave date_hour
   const byKey = new Map<string, ScheduleCell>();
   for (const c of raw) {
     const hhmm = norm(c.hour);
     const key = `${c.date}_${hhmm}`;
-    const curr = byKey.get(key);
-    const pCurr = pr(curr?.status);
-    const pNext = pr(c?.status);
-    if (!curr || pNext >= pCurr) {
-      byKey.set(key, { ...c, hour: hhmm });
-    }
+    const prev = byKey.get(key);
+    const next: ScheduleCell = { ...c, hour: hhmm, status: normalizeCellStatus(c.status) };
+    if (!prev || pr(next.status) >= pr(prev.status)) byKey.set(key, next);
   }
-  return Array.from(byKey.values());
+  //  CANCELADO a libre (null); DISPONIBLE pasado a VENCIDA
+  const result: ScheduleCell[] = [];
+  for (const c of Array.from(byKey.values())) {
+    // CANCELADO a libre (null)
+    if (c.status === 'CANCELADO') {
+      result.push({ ...c, status: null, reservationId: null, studentId: null });
+      continue;
+    }
+    // DISPONIBLE pasado a VENCIDA
+    if (c.status === 'DISPONIBLE' && isPastSlot(c.date, c.hour)) {
+      result.push({ ...c, status: 'VENCIDA' });
+      continue;
+    }
+    result.push(c);
+  }
+  return result;
 }
 
-
 /** Crear reserva (estudiante) */
-export async function createReservation(tutorId: string, date: string, hour: string, token?: string): Promise<Reservation> {
+export async function createReservation(
+  tutorId: string,
+  date: string,
+  hour: string,
+  token?: string
+): Promise<Reservation> {
   const url = `${BASE}/api/reservations`;
   const res = await fetch(url, {
     method: 'POST',
     headers: headers(token),
     body: JSON.stringify({ tutorId, date, hour })
   });
-  return handle(res);
+  const r = (await handle(res)) as Reservation;
+  r.status = normalizeReservationStatus(r.status);
+  return r;
 }
 
 /** Mis reservas (estudiante) en rango [from,to] */
-export async function getMyReservations(from: string, to: string, token?: string): Promise<Reservation[]> {
+export async function getMyReservations(
+  from: string,
+  to: string,
+  token?: string
+): Promise<Reservation[]> {
   const url = `${BASE}/api/reservations/my?from=${from}&to=${to}`;
   const res = await fetch(url, { method: 'GET', headers: headers(token) });
-  return handle(res);
+  const arr = (await handle(res)) as Reservation[];
+  return arr.map(r => ({ ...r, status: normalizeReservationStatus(r.status) }));
 }
 
 /** Reservas para mí (como tutor) en rango */
-export async function getTutorReservations(from: string, to: string, token?: string): Promise<Reservation[]> {
+export async function getTutorReservations(
+  from: string,
+  to: string,
+  token?: string
+): Promise<Reservation[]> {
   const url = `${BASE}/api/reservations/for-me?from=${from}&to=${to}`;
   const res = await fetch(url, { method: 'GET', headers: headers(token) });
-  return handle(res);
+  const arr = (await handle(res)) as Reservation[];
+  return arr.map(r => ({ ...r, status: normalizeReservationStatus(r.status) }));
 }
 
-/** Cancelar reserva propia (estudiante o tutor según backend) */
+/** Cancelar reserva */
 export async function cancelReservation(id: string, token?: string): Promise<Reservation> {
   const url = `${BASE}/api/reservations/${id}/cancel`;
   const res = await fetch(url, { method: 'PATCH', headers: headers(token) });
-  return handle(res);
+  const r = (await handle(res)) as Reservation;
+  r.status = normalizeReservationStatus(r.status);
+  return r;
 }
 
 /** Aceptar reserva (tutor) */
 export async function acceptReservation(id: string, token?: string): Promise<Reservation> {
   const url = `${BASE}/api/reservations/${id}/accept`;
   const res = await fetch(url, { method: 'PATCH', headers: headers(token) });
-  return handle(res);
+  const r = (await handle(res)) as Reservation;
+  r.status = normalizeReservationStatus(r.status);
+  return r;
 }
 
-/** Reemplazar disponibilidad de un día (tutor) - CUIDADO: elimina horas no incluidas */
+/** Reemplazar disponibilidad de un día (tutor) */
 export async function replaceDayAvailability(date: string, hours: string[], token?: string): Promise<void> {
   const url = `${BASE}/api/availability/day/${date}`;
   const res = await fetch(url, { method: 'PUT', headers: headers(token), body: JSON.stringify({ hours }) });
   await handle(res);
 }
 
-/** NUEVA: Agregar disponibilidad sin eliminar existente (tutor) */
-export async function addAvailability(date: string, hours: string[], token?: string):
-  Promise<{ addedCount: number; requestedCount: number; date: string; message: string; }> {
+/** Agregar disponibilidad (tutor) */
+export async function addAvailability(
+  date: string,
+  hours: string[],
+  token?: string
+): Promise<{ addedCount: number; requestedCount: number; date: string; message: string; }> {
   const url = `${BASE}/api/availability/add`;
   const res = await fetch(url, { method: 'POST', headers: headers(token), body: JSON.stringify({ date, hours }) });
   return handle(res);
 }
 
-/** NUEVA: Eliminar slots específicos de disponibilidad (tutor) */
-export async function deleteAvailabilitySlots(slotIds: string[], token?: string): Promise<void> {
-  const url = `${BASE}/api/availability/delete-batch`;
-  const res = await fetch(url, {
-    method: 'DELETE',
-    headers: headers(token),
-    body: JSON.stringify({ slotIds })
-  });
-  await handle(res);
-}
-
-/** Generar disponibilidad por periodo (tutor) */
-export interface BulkAvailabilityRequest {
-  fromDate: string;  // YYYY-MM-DD
-  toDate: string;    // YYYY-MM-DD
-  fromHour: string;  // HH:mm
-  toHour: string;    // HH:mm (exclusive)
-  daysOfWeek?: number[]; // 1..7
-  timezone?: string;
-}
-export async function bulkAvailability(req: BulkAvailabilityRequest, token?: string): Promise<any> {
-  const url = `${BASE}/api/availability/bulk`;
-  const res = await fetch(url, { method: 'POST', headers: headers(token), body: JSON.stringify(req) });
-  return handle(res);
-}
-
-/** Disponibilidad pública de un tutor para una semana */
-export async function getPublicAvailabilityForTutor(tutorId: string, weekStart: string, token?: string): Promise<ScheduleCell[]> {
+/** Disponibilidad pública (usada por BookTutorPage) con normalización + vencidas */
+export async function getPublicAvailabilityForTutor(
+  tutorId: string,
+  weekStart: string,
+  token?: string
+): Promise<ScheduleCell[]> {
   const url = `${BASE}/api/availability/tutor/${encodeURIComponent(tutorId)}?weekStart=${weekStart}`;
   const res = await fetch(url, { method: 'GET', headers: headers(token) });
-  const data = await handle(res);
-  return data.map((c: ScheduleCell) => ({ ...c, hour: norm(c.hour) }));
+  const raw = (await handle(res)) as ScheduleCell[];
+
+  // normalizamos ACTIVA a PENDIENTE y marcamos vencidas
+  const mapped = raw.map(c => {
+    const hhmm = norm(c.hour);
+    const st = normalizeCellStatus(c.status);
+    const expired = st === 'DISPONIBLE' && isPastSlot(c.date, hhmm);
+    return { ...c, hour: hhmm, status: expired ? 'VENCIDA' : st };
+  });
+
+  return mapped;
+}
+
+export async function clearDayAvailability(date: string, token?: string): Promise<void> {
+  const url = `${BASE}/api/availability/day/${date}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: headers(token),
+    body: JSON.stringify({ hours: [] }),   // body requerido aunque sea []
+  });
+  await handle(res);
 }

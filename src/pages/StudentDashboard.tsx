@@ -193,7 +193,7 @@ const StudentDashboard: React.FC = () => {
     const ids = Array.from(new Set(
       myReservations
         .filter(r => !r.tutorName || r.tutorName.trim() === '')
-        .map(r => (r as any).tutorId) // asegúrate que tu Reservation trae tutorId
+        .map(r => (r as any).tutorId)
         .filter(Boolean) as string[]
     )).filter(id => !profilesByTutorId[id]);
 
@@ -459,10 +459,10 @@ const StudentDashboard: React.FC = () => {
                   let status;
                   if (s.includes('CANCEL')) {
                     status = { label: 'CANCELADO', color: '#ef4444', bg: 'rgba(239,68,68,.12)' };
-                  } else if (s.includes('ACTIV')) {
-                    status = { label: 'ACTIVA', color: '#f59e0b', bg: 'rgba(245,158,11,.12)' };
+                  } else if (s.includes('PEND')) {
+                    status = { label: 'PENDIENTE', color: '#f59e0b', bg: 'rgba(245,158,11,.12)' };
                   } else if (s.includes('ACEPT') || s.includes('CONFIRM')) {
-                    status = { label: 'CONFIRMADA', color: '#10b981', bg: 'rgba(16,185,129,.12)' };
+                    status = { label: 'ACEPTADA', color: '#10b981', bg: 'rgba(16,185,129,.12)' };
                   } else {
                     status = { label: r.status || '—', color: '#6b7280', bg: 'rgba(107,114,128,.12)' };
                   }

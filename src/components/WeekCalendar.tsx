@@ -3,7 +3,7 @@ import '../styles/Calendar.css';
 import type { ScheduleCell, CellStatus } from '../service/Api-scheduler';
 
 export type Mode = 'student' | 'tutor';
-
+/** Props para WeekCalendar */
 export interface WeekCalendarProps {
   weekStart: string;
   cells: ScheduleCell[];
@@ -15,6 +15,7 @@ export interface WeekCalendarProps {
   onNextWeek?: () => void;
   onClear?: () => void;
 }
+/** Convierte hora a HH:mm */
 function toHHMM(h: string) {
   const s = (h ?? '').trim();
   const regex = /^(\d{1,2}):(\d{2})/;
@@ -27,7 +28,7 @@ function addDays(iso: string, days: number): string {
   dt.setUTCDate(dt.getUTCDate() + days);
   return dt.toISOString().slice(0, 10); // seguro en UTC
 }
-
+/** Genera lista de horas (00:00 a 23:00) */
 function hours(): string[] {
   const arr: string[] = [];
   for (let h = 0; h < 24; h++) {
@@ -35,46 +36,53 @@ function hours(): string[] {
   }
   return arr;
 }
-
+/** Clase CSS según estado de celda. */
 function classForStatus(status: CellStatus | undefined | null): string {
   switch (status) {
     case 'DISPONIBLE': return 'cell available';
-    case 'ACTIVA': return 'cell active';
-    case 'ACEPTADO': return 'cell accepted';
-    case 'CANCELADO': return 'cell canceled';
-    default: return 'cell disabled';
+    case 'PENDIENTE':  return 'cell pending';
+    case 'ACTIVA':     return 'cell pending';   // legacy a misma clase que PENDIENTE
+    case 'ACEPTADO':   return 'cell accepted';
+    case 'CANCELADO':  return 'cell canceled';
+    case 'VENCIDA':    return 'cell expired';   // slots pasados (rosa)
+    default:           return 'cell disabled';
   }
 }
 
+/** Etiquetas legibles. */
 function getStatusLabel(status: CellStatus | undefined | null): string {
   switch (status) {
     case 'DISPONIBLE': return 'Disponible';
-    case 'ACTIVA': return 'Activa';
-    case 'ACEPTADO': return 'Aceptada';
-    case 'CANCELADO': return 'Cancelada';
-    default: return '';
+    case 'PENDIENTE':
+    case 'ACTIVA':     return 'Pendiente'; // legacy
+    case 'ACEPTADO':   return 'Aceptada';
+    case 'CANCELADO':  return 'Cancelada';
+    case 'VENCIDA':    return 'Vencida';
+    default:           return '';
   }
 }
-
+/** Lista de horas (00:00 a 23:00) */
 const H_LIST = hours();
-
+/** Componente de calendario semanal */
 const WeekCalendar: React.FC<WeekCalendarProps> = ({
-  weekStart, cells, mode, selectedKeys, onToggle, onSinglePick, onPrevWeek, onNextWeek, onClear
+  weekStart, cells, mode, selectedKeys, onToggle, onSinglePick
 }) => {
   const days = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   }, [weekStart]);
-
+  // Mapa de celdas
   const map = useMemo(() => {
-    // prioridad sin incluir null como clave
+    // ✅ PRIORIDADES COMPLETAS (incluye PENDIENTE y VENCIDA; ACTIVA como legacy)
     const priority: Record<Exclude<CellStatus, null>, number> = {
       ACEPTADO: 4,
-      ACTIVA: 3,
+      PENDIENTE: 3,
+      ACTIVA: 3,      // legacy
       DISPONIBLE: 2,
       CANCELADO: 1,
+      VENCIDA: 0,
     };
     const pr = (s: CellStatus | null | undefined) => (s ? priority[s] ?? 0 : 0);
-
+    // unificamos por (date,hour) quedándonos con el de mayor prioridad
     const m = new Map<string, ScheduleCell>();
     for (const c of cells || []) {
       const hhmm = toHHMM(c.hour);
@@ -88,75 +96,60 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     return m;
   }, [cells]);
 
-
-
   const mouseDown = useRef(false);
   const paintMode = useRef<'select' | 'deselect' | null>(null);
   const processedInDrag = useRef<Set<string>>(new Set());
-
+  // Handlers de interacción
   const handleDown = (key: string, cell: ScheduleCell) => {
     if (mode !== 'tutor' || !onToggle) return;
-
-    // IMPORTANTE: Reiniciar el estado de arrastre completamente
     mouseDown.current = true;
-    processedInDrag.current = new Set(); // Limpiar las celdas procesadas del arrastre anterior
-
-    // Determinar el modo de pintura basado en si la celda está seleccionada
+    processedInDrag.current = new Set();
+    // Añadimos la celda actual al conjunto de celdas procesadas
     const isCurrentlySelected = selectedKeys?.has(key) || false;
     paintMode.current = isCurrentlySelected ? 'deselect' : 'select';
-
-    // Aplicar toggle a la primera celda
+    // Procesamos la celda actual
     processedInDrag.current.add(key);
     onToggle(key, cell);
   };
-
+  // Handler para entrar en celda durante arrastre
   const handleEnter = (key: string, cell: ScheduleCell) => {
     if (!mouseDown.current || mode !== 'tutor' || !onToggle) return;
-
-    // Si ya procesamos esta celda en este arrastre, no hacer nada
     if (processedInDrag.current.has(key)) return;
-
+    // Marcamos como procesada
     processedInDrag.current.add(key);
-
-    // Aplicar toggle basado en el modo de pintura establecido al inicio del drag
     const isCurrentlySelected = selectedKeys?.has(key) || false;
-
-    // Solo aplicar toggle si el estado actual de la celda necesita cambiar según el paintMode
     if ((paintMode.current === 'select' && !isCurrentlySelected) ||
-      (paintMode.current === 'deselect' && isCurrentlySelected)) {
+        (paintMode.current === 'deselect' && isCurrentlySelected)) {
       onToggle(key, cell);
     }
   };
-
+  // Handler para soltar el ratón
   const handleUp = () => {
-    // CRÍTICO: Limpiar el estado completamente cuando se suelta el mouse
     mouseDown.current = false;
     paintMode.current = null;
     processedInDrag.current.clear();
   };
 
-  const handleClick = (key: string, cell: ScheduleCell) => {
-    // Solo para modo estudiante
+  const handleClick = (_key: string, cell: ScheduleCell) => {
+    // Solo para modo estudiante: solo se puede elegir DISPONIBLE
     if (mode === 'student') {
       const canPick = cell.status === 'DISPONIBLE';
-      if (canPick && onSinglePick) {
-        onSinglePick(cell);
-      }
+      if (canPick && onSinglePick) onSinglePick(cell);
     }
   };
-
+  // Renderizado de celda
   const renderCell = (d: string, h: string) => {
     const key = `${d}_${h}`;
     const cell = map.get(key) || { date: d, hour: h, status: null, reservationId: null, studentId: null };
     const isSelected = !!selectedKeys?.has(key);
     const canPick = mode === 'student' ? cell.status === 'DISPONIBLE' : true;
-
+    /** Clase CSS según estado de celda. */
     const css = [
       classForStatus(cell.status),
       isSelected ? 'selected' : '',
       canPick ? 'can-pick' : 'not-pickable'
     ].join(' ').trim();
-
+    // Etiqueta legible
     const label = getStatusLabel(cell.status);
 
     return (
@@ -164,10 +157,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
         key={key}
         type="button"
         className={css}
-        onMouseDown={(e) => {
-          e.preventDefault(); // Prevenir selección de texto
-          handleDown(key, cell);
-        }}
+        onMouseDown={(e) => { e.preventDefault(); handleDown(key, cell); }}
         onMouseEnter={() => handleEnter(key, cell)}
         onMouseUp={handleUp}
         onClick={() => handleClick(key, cell)}
@@ -180,17 +170,10 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     );
   };
 
-  // IMPORTANTE: Agregar listeners globales para asegurar que handleUp siempre se ejecute
   React.useEffect(() => {
-    const globalHandleUp = () => {
-      if (mouseDown.current) {
-        handleUp();
-      }
-    };
-
+    const globalHandleUp = () => { if (mouseDown.current) handleUp(); };
     globalThis.addEventListener('mouseup', globalHandleUp);
     globalThis.addEventListener('touchend', globalHandleUp);
-
     return () => {
       globalThis.removeEventListener('mouseup', globalHandleUp);
       globalThis.removeEventListener('touchend', globalHandleUp);
@@ -198,10 +181,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
   }, []);
 
   return (
-    <fieldset
-      className="calendar-wrapper"
-      aria-label="Week calendar"
-    >
+    <fieldset className="calendar-wrapper" aria-label="Week calendar">
       <div className="calendar-grid">
         <div className="col hour-col">
           <div className="head-cell">Hora</div>

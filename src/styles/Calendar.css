@@ -1,11 +1,27 @@
-.calendar-wrapper { width: 100%; }
+.calendar-wrapper {
+  width: 100%;
+}
+
 .calendar-toolbar {
-  display: flex; align-items: center; justify-content: center; gap: 10px; margin: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0;
 }
-.calendar-title { font-weight: 600; }
+
+.calendar-title {
+  font-weight: 600;
+}
+
 .nav-btn {
-  border: none; padding: 6px 10px; border-radius: 8px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  border: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
+
 .calendar-grid {
   display: grid;
   grid-template-columns: 88px repeat(7, 1fr);
@@ -16,23 +32,44 @@
   overflow: hidden;
   background: var(--u-card);
 }
-.col { display: grid; grid-template-rows: 40px repeat(24, 38px); gap: 4px; min-width: 0; }
+
+.col {
+  display: grid;
+  grid-template-rows: 40px repeat(24, 38px);
+  gap: 4px;
+  min-width: 0;
+}
+
 .head-cell {
-  position: sticky; top: 0; background: #ffffff; border: 1px solid #eaeaea; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center; font-weight: 600;
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+  border: 1px solid #eaeaea;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
 }
+
 .hour-cell {
-  display: flex; align-items: center; justify-content: center; font-size: 12px;
-  border: 1px dashed #e8e8e8; border-radius: 6px; color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  border: 1px dashed #e8e8e8;
+  border-radius: 6px;
+  color: #666;
 }
+
 .cell {
   height: 38px;
   border: 1px solid var(--u-border);
   border-radius: 6px;
   background: #fff;
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: default;
   transition: background .15s ease, transform .06s ease, box-shadow .15s ease;
   position: relative;
@@ -43,13 +80,21 @@
   letter-spacing: 0.2px;
 }
 
-/* Estados con colores más intensos */
+/* Estados base */
 .cell.available {
   background: #10B981;
   border-color: #059669;
   box-shadow: inset 0 0 0 1px rgba(5, 150, 105, 0.4);
 }
 
+/* Naranja para PENDIENTE (y legacy ACTIVA) */
+.cell.pending {
+  background: #F59E0B;
+  border-color: #D97706;
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.4);
+}
+
+/* Mantener .active por si algo lo usa aún (apunta al mismo estilo que pending) */
 .cell.active {
   background: #F59E0B;
   border-color: #D97706;
@@ -66,14 +111,28 @@
   border-color: #DC2626;
 }
 
+/* Rosa para VENCIDA */
+.cell.expired {
+  background: #EC4899;
+  /* pink-500 */
+  border-color: #DB2777;
+  /* pink-600 */
+  box-shadow: inset 0 0 0 1px rgba(219, 39, 119, 0.35);
+}
+
 .cell.disabled {
   background: #F3F4F6;
   color: #9CA3AF;
   border-color: #E5E7EB;
 }
 
-.cell.can-pick { cursor: pointer; }
-.cell.not-pickable { cursor: not-allowed; }
+.cell.can-pick {
+  cursor: pointer;
+}
+
+.cell.not-pickable {
+  cursor: not-allowed;
+}
 
 /* Hover para celdas disponibles */
 .cell.available.can-pick:hover {
@@ -85,44 +144,44 @@
 /* Selección */
 .cell.selected {
   outline: 3px solid #6B46C1;
-  box-shadow: inset 0 0 0 2px #6b46c166, 0 0 0 4px rgba(107, 70, 193, 0.15);
+  box-shadow: inset 0 0 0 2px #c146c166, 0 0 0 4px rgba(107, 70, 193, 0.15);
   transform: scale(1.05);
 }
 
-.cell .dot { 
-  width: 4px; 
-  height: 4px; 
-  border-radius: 50%; 
-  background: rgba(255,255,255,0.5); 
+.cell .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
   position: absolute;
   bottom: 3px;
   right: 3px;
 }
 
-:root{
-  --u-border:#E7E9F2;
-  --u-muted:#6B7280;
-  --u-card:#ffffff;
-  --u-ghost:#F3F4F6;
-  --u-ghost-hover:#EEF2FF;
-  --u-green:#065F46;
-  --u-green-200:#BBF7D0;
-  --u-green-100:#DCFCE7;
-  --u-green-050:#ECFDF5;
+:root {
+  --u-border: #E7E9F2;
+  --u-muted: #6B7280;
+  --u-card: #ffffff;
+  --u-ghost: #F3F4F6;
+  --u-ghost-hover: #EEF2FF;
+  --u-green: #065F46;
+  --u-green-200: #BBF7D0;
+  --u-green-100: #DCFCE7;
+  --u-green-050: #ECFDF5;
 }
 
-.calendar-container.card{
+.calendar-container.card {
   border-radius: 12px;
   overflow: hidden;
   background: var(--u-card);
 }
 
-.col.hour-col{
+.col.hour-col {
   background: #FAFBFF;
   border-right: 1px solid var(--u-border);
 }
 
-.col.hour-col .hour-cell{
+.col.hour-col .hour-cell {
   height: 38px;
   display: grid;
   place-items: center;
@@ -131,7 +190,7 @@
   border-bottom: 1px solid var(--u-border);
 }
 
-.col.day-col .head-cell{
+.col.day-col .head-cell {
   height: 56px;
   display: grid;
   place-items: center;
@@ -141,10 +200,12 @@
   background: #fff;
 }
 
-.cell.taken { background: #F3F4F6; }
+.cell.taken {
+  background: #F3F4F6;
+}
 
 /* Navegación de semana con gradiente morado */
-.week-nav{
+.week-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -156,7 +217,7 @@
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
-.week-nav__title{
+.week-nav__title {
   font-weight: 700;
   letter-spacing: .2px;
   text-align: center;
@@ -201,12 +262,12 @@
   background: linear-gradient(135deg, #7C3AED 0%, #6366F1 100%);
   color: white;
   border: none;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 2px 8px rgba(237, 58, 183, 0.3);
 }
 
 .btn-primary-modern:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+  box-shadow: 0 4px 12px rgba(237, 58, 183, 0.3);
 }
 
 .btn-modern:disabled {
@@ -218,9 +279,9 @@
 }
 
 /* Botón fantasma para navegación de semana */
-.btn-ghost{
-  background: rgba(255,255,255,.15);
-  border: 1px solid rgba(255,255,255,.3);
+.btn-ghost {
+  background: rgba(255, 255, 255, .15);
+  border: 1px solid rgba(255, 255, 255, .3);
   color: white;
   padding: 8px 16px;
   border-radius: 8px;
@@ -231,19 +292,19 @@
   transition: all 0.2s ease;
 }
 
-.btn-ghost:hover{
-  background: rgba(255,255,255,.25);
-  border-color: rgba(255,255,255,.5);
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, .25);
+  border-color: rgba(255, 255, 255, .5);
   transform: translateY(-1px);
 }
 
-.btn-ghost:active{ 
-  transform: translateY(0); 
+.btn-ghost:active {
+  transform: translateY(0);
 }
 
-.btn-ghost:focus-visible{ 
-  outline: 2px solid white; 
-  outline-offset: 2px; 
+.btn-ghost:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
 }
 
 /* Panel azul tipo primary */
@@ -252,7 +313,7 @@
   margin: 20px auto;
   padding: 18px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #6d6ae8 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #e86ad7 0%, #e86ad7 100%);
   color: #fff;
   box-shadow: 0 10px 24px rgba(124, 58, 237, .18);
   border: 0;
@@ -266,6 +327,7 @@
   gap: 12px;
   margin-bottom: 14px;
 }
+
 .week-toolbar__title {
   font-weight: 800;
   letter-spacing: .2px;
@@ -285,33 +347,38 @@
   color: #111827;
   border-radius: 14px;
   padding: 16px;
-  border: 1px solid rgba(17,24,39,.06);
-  box-shadow: 0 2px 8px rgba(17,24,39,.06);
+  border: 1px solid rgba(17, 24, 39, .06);
+  box-shadow: 0 2px 8px rgba(17, 24, 39, .06);
   transition: box-shadow .18s ease, transform .04s ease, border-color .18s ease;
 }
+
 .reservation-card:hover,
 .reservation-card:focus {
-  box-shadow: 0 12px 28px rgba(93,63,211,.15);
+  box-shadow: 0 12px 28px rgba(93, 63, 211, .15);
   transform: translateY(-1px);
-  border-color: rgba(124,58,237,.25);
+  border-color: rgba(124, 58, 237, .25);
 }
+
 .reservation-card__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
+
 .reservation-card__title {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
 }
+
 .reservation-card__meta {
   display: flex;
   gap: 16px;
   margin-top: 8px;
   color: #4b5563;
 }
+
 .reservation-card__actions {
   margin-top: 12px;
 }
@@ -328,8 +395,8 @@
 
 /* Nota vacía */
 .empty-note {
-  background: rgba(255,255,255,.25);
-  border: 1px dashed rgba(255,255,255,.5);
+  background: rgba(255, 255, 255, .25);
+  border: 1px dashed rgba(255, 255, 255, .5);
   color: #fff;
   padding: 14px;
   border-radius: 12px;

@@ -20,12 +20,12 @@ function mondayOf(dateIso: string): string {
     d.setDate(d.getDate() + diff);
     return d.toISOString().slice(0, 10);
 }
-// Suma días a una fecha ISO
 function addDays(iso: string, days: number): string {
     const d = new Date(iso + 'T00:00:00');
     d.setDate(d.getDate() + days);
     return d.toISOString().slice(0, 10);
 }
+
 // Estado esperado en la navegación
 interface NavState {
     tutor?: {
@@ -39,23 +39,76 @@ interface NavState {
     };
     role?: 'tutor' | 'student';
 }
+
+// Tipos para banner
+type BannerType = 'success' | 'warning' | 'error';
+type Banner = { type: BannerType; text: string } | null;
+// Estilo para banner
+const bannerStyle = (type: BannerType): React.CSSProperties => {
+    if (type === 'success') {
+        return {
+            margin: '12px 0',
+            padding: '12px 16px',
+            background: '#ECFDF5',
+            border: '1px solid #A7F3D0',
+            borderRadius: '8px',
+            color: '#065F46',
+            fontWeight: 500,
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+        };
+    }
+    if (type === 'warning') {
+        return {
+            margin: '12px 0',
+            padding: '12px 16px',
+            background: '#FFFBEB',
+            border: '1px solid #FDE68A',
+            borderRadius: '8px',
+            color: '#92400E',
+            fontWeight: 500,
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+        };
+    }
+    // error
+    return {
+        margin: '12px 0',
+        padding: '12px 16px',
+        background: '#FEF2F2',
+        border: '1px solid #FECACA',
+        borderRadius: '8px',
+        color: '#991B1B',
+        fontWeight: 500,
+        display: 'flex',
+        gap: 8,
+        alignItems: 'center',
+    };
+};
+
 // Página para reservar una sesión con un tutor
 const BookTutorPage: React.FC = () => {
     const { tutorId } = useParams<{ tutorId: string }>();
     const location = useLocation();
     const navigate = useNavigate();
     const auth = useAuth();
+
     // Datos del tutor y rol desde la navegación
     const state = location.state as NavState | undefined;
     const profile = state?.tutor ?? {};
     const role: 'tutor' | 'student' = state?.role ?? 'tutor';
+
     // Estados locales
     const [token, setToken] = useState<string | undefined>();
     const [weekStart, setWeekStart] = useState(() => mondayOf(new Date().toISOString().slice(0, 10)));
     const [scheduleCells, setScheduleCells] = useState<ScheduleCell[]>([]);
     const [selectedCell, setSelectedCell] = useState<ScheduleCell | null>(null);
-    const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+
+    // Banner UI
+    const [banner, setBanner] = useState<Banner>(null);
 
     // Menú usuario
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -66,7 +119,8 @@ const BookTutorPage: React.FC = () => {
         }),
         [auth.user]
     );
-    // Funciones de navegación y sesión
+
+    // Navegación
     const go = (tab: string) => navigate(`/student-dashboard?tab=${tab}`);
     const handleLogout = () => { auth.removeUser(); navigate('/login'); };
     const signOutRedirect = () => {
@@ -75,12 +129,14 @@ const BookTutorPage: React.FC = () => {
         const cognitoDomain = 'https://us-east-1splan606f.auth.us-east-1.amazoncognito.com';
         globalThis.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
     };
+
     // Identificador efectivo del tutor
     const effectiveTutorId = useMemo(
         () => (profile as any)?.userId || (profile as any)?.sub || tutorId,
         [profile, tutorId]
     );
-    // Cargar token al autenticarse
+
+    // Cargar token
     useEffect(() => {
         if (auth.isAuthenticated && auth.user) {
             const idToken = (auth.user as any)?.id_token as string | undefined;
@@ -90,17 +146,19 @@ const BookTutorPage: React.FC = () => {
             setToken(undefined);
         }
     }, [auth.isAuthenticated, auth.user]);
+
     // Cargar disponibilidad del tutor
     useEffect(() => {
         const loadWeek = async () => {
             if (!token || !effectiveTutorId) return;
             setLoading(true);
             setSelectedCell(null);
-            setConfirmMsg(null);
+            setBanner(null); // limpiar cualquier banner previo al cambiar semana
             try {
                 const data = await getScheduleForTutor(effectiveTutorId, weekStart, token);
                 setScheduleCells(data);
             } catch {
+                // fallback público
                 const data = await getPublicAvailabilityForTutor(effectiveTutorId, weekStart, token);
                 setScheduleCells(data);
             } finally {
@@ -109,14 +167,35 @@ const BookTutorPage: React.FC = () => {
         };
         loadWeek();
     }, [token, effectiveTutorId, weekStart]);
-    // Confirmar reserva
+
+    // Confirmar reserva (con manejo de errores agradable)
     const confirmReservation = async () => {
         if (!selectedCell || !token || !effectiveTutorId) return;
+
+        // Evitar reservarse a sí mismo antes de llamar al backend
+        const myId = auth.user?.profile?.sub;
+        if (myId && effectiveTutorId && myId === effectiveTutorId) {
+            setBanner({ type: 'warning', text: 'No te puedes reservar a ti mismo.' });
+            return;
+        }
+        // Confirmar con el usuario el resumen de la reserva
         const ok = globalThis.confirm(`Confirmar reserva el ${selectedCell.date} a las ${selectedCell.hour}?`);
         if (!ok) return;
-        await createReservation(effectiveTutorId, selectedCell.date, selectedCell.hour, token);
-        setConfirmMsg('✅ ¡Reserva creada!');
-        setTimeout(() => navigate('/student-dashboard?tab=my-reservations', { replace: true }), 900);
+
+        try {
+            await createReservation(effectiveTutorId, selectedCell.date, selectedCell.hour, token);
+            setBanner({ type: 'success', text: '¡Reserva creada correctamente!' });
+            setTimeout(() => navigate('/student-dashboard?tab=my-reservations', { replace: true }), 900);
+        } catch (e: any) {
+            const msg = String(e?.message || '').toLowerCase();
+
+            // Mensaje específico del backend para self-booking
+            if (msg.includes('tutor no puede ser el mismo') || msg.includes('no puede ser el mismo que el estudiante')) {
+                setBanner({ type: 'warning', text: 'No te puedes reservar a ti mismo.' });
+            } else {
+                setBanner({ type: 'error', text: e?.message || 'Error creando la reserva.' });
+            }
+        }
     };
 
     return (
@@ -160,6 +239,17 @@ const BookTutorPage: React.FC = () => {
             {/* Contenido principal */}
             <main className="dashboard-main">
                 <div style={{ padding: 16, maxWidth: 1100, margin: '0 auto' }}>
+
+                    {/* Banner de mensajes */}
+                    {banner && (
+                        <div style={bannerStyle(banner.type)}>
+                            <span aria-hidden>
+                                {banner.type === 'success' ? '✅' : banner.type === 'warning' ? '⚠️' : '❌'}
+                            </span>
+                            <span>{banner.text}</span>
+                        </div>
+                    )}
+
                     {/* Tarjeta compacta del tutor */}
                     <section className="card compact-profile">
                         <div className="compact-profile__left">
@@ -208,7 +298,6 @@ const BookTutorPage: React.FC = () => {
                             {selectedCell
                                 ? <>Seleccionado: <strong>{selectedCell.date} {selectedCell.hour}</strong></>
                                 : 'Selecciona una hora disponible'}
-                            {confirmMsg && <div style={{ marginTop: 6, color: 'green' }}>{confirmMsg}</div>}
                         </div>
                         <div className="action-strip__right">
                             <button className="btn btn-secondary" onClick={() => navigate(-1)}>Volver</button>
@@ -243,7 +332,7 @@ const BookTutorPage: React.FC = () => {
                                         <div key={h} className="hour-cell">{h}</div>
                                     ))}
                                 </div>
-                                {/* Generar columnas para cada día de la semana */}
+
                                 {Array.from({ length: 7 }, (_, i) => i).map(i => {
                                     const date = addDays(weekStart, i);
                                     return (
@@ -251,25 +340,20 @@ const BookTutorPage: React.FC = () => {
                                             <div className="head-cell">
                                                 {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][i]}<br />{date.slice(5)}
                                             </div>
-                                            {/* Generar celdas horarias */}
+
                                             {Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0') + ':00').map(h => {
                                                 const c = scheduleCells.find(k => k.date === date && k.hour === h);
                                                 const st = ((c?.status ?? '') as string).toUpperCase();
                                                 const pickable = st === 'DISPONIBLE' || st === 'AVAILABLE';
                                                 const isSelected = selectedCell?.date === date && selectedCell?.hour === h;
                                                 const key = `${date}_${h}`;
-                                                // determine status class
+
                                                 let statusClass = 'disabled';
-                                                if (st) {
-                                                    statusClass = pickable ? 'available' : 'taken';
-                                                }
-                                                // determine aria-label
+                                                if (st) statusClass = pickable ? 'available' : 'taken';
+
                                                 let ariaLabel = `No disponible ${h} ${date}`;
-                                                if (pickable) {
-                                                    ariaLabel = `Disponible ${h} ${date}`;
-                                                } else if (st) {
-                                                    ariaLabel = `Ocupado ${h} ${date}`;
-                                                }
+                                                if (pickable) ariaLabel = `Disponible ${h} ${date}`;
+                                                else if (st) ariaLabel = `Ocupado ${h} ${date}`;
 
                                                 return (
                                                     <button
@@ -281,9 +365,9 @@ const BookTutorPage: React.FC = () => {
                                                             (pickable ? ' can-pick' : '') +
                                                             (isSelected ? ' selected' : '')
                                                         }
-                                                        //  no tooltip con estados internos
                                                         onClick={pickable ? () => {
                                                             setSelectedCell({ date, hour: h, status: 'DISPONIBLE', reservationId: null, studentId: null });
+                                                            setBanner(null); // limpiar banner al seleccionar nueva hora
                                                         } : undefined}
                                                         disabled={!pickable}
                                                         aria-pressed={isSelected}
@@ -293,7 +377,6 @@ const BookTutorPage: React.FC = () => {
                                                     </button>
                                                 );
                                             })}
-
                                         </div>
                                     );
                                 })}
