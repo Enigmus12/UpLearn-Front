@@ -17,11 +17,11 @@ const HomePage: React.FC = () => {
     navigate('/register');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Cerrar sesión local primero
     auth.removeUser();
-  };
-
-  const signOutRedirect = () => {
+    
+    // Luego redirigir a Cognito para cerrar sesión
     const clientId = "lmk8qk12er8t8ql9phit3u12e";
     const logoutUri = "http://localhost:3000";
     const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
@@ -80,14 +80,7 @@ const HomePage: React.FC = () => {
                 className="btn btn-logout" 
                 onClick={handleLogout}
               >
-                Cerrar Sesión (Local)
-              </button>
-              
-              <button 
-                className="btn btn-logout-cognito" 
-                onClick={signOutRedirect}
-              >
-                Cerrar Sesión (Cognito)
+                Cerrar Sesión
               </button>
             </div>
           </div>

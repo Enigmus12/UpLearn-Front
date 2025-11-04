@@ -503,6 +503,40 @@ class ApiUserService {
   }
 
   /**
+   * Verifica el estado de completitud del perfil del usuario autenticado
+   * @param {string} cognitoToken - Token de Cognito
+   * @param {string} role - Rol específico a verificar ('STUDENT' o 'TUTOR'). Opcional.
+   * @returns {Promise<{isComplete: boolean, missingFields: string[], currentRole: string}>}
+   */
+  static async getProfileStatus(cognitoToken, role = null) {
+    try {
+      const url = role 
+        ? `${API_BASE_URL}/profile-status?role=${role}`
+        : `${API_BASE_URL}/profile-status`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cognitoToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor obteniendo estado del perfil:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo estado del perfil:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Añade un rol adicional al usuario autenticado
    * @param {string} cognitoToken - Token de Cognito
    * @param {string} userId - ID del usuario
