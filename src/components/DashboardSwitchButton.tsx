@@ -6,13 +6,13 @@ interface DashboardSwitchButtonProps {
   className?: string;
 }
 
-const DashboardSwitchButton: React.FC<DashboardSwitchButtonProps> = ({ 
-  currentRole, 
-  className = '' 
+const DashboardSwitchButton: React.FC<DashboardSwitchButtonProps> = ({
+  currentRole,
+  className = ''
 }) => {
   const { switchToDashboard, canSwitchTo, isLoading, error } = useDashboardSwitch();
   const [canSwitch, setCanSwitch] = useState(false);
-  
+
   const targetRole = currentRole === 'student' ? 'tutor' : 'student';
   const targetRoleText = targetRole === 'student' ? 'Estudiante' : 'Tutor';
   const targetIcon = targetRole === 'student' ? '📚' : '👨‍🏫';
@@ -48,12 +48,12 @@ const DashboardSwitchButton: React.FC<DashboardSwitchButtonProps> = ({
           {isLoading ? 'Cambiando...' : `Ir a ${targetRoleText}`}
         </span>
       </button>
-      
+
       {error && (
-        <div className="switch-error" style={{ 
-          color: 'red', 
-          fontSize: '12px', 
-          marginTop: '4px' 
+        <div className="switch-error" style={{
+          color: 'red',
+          fontSize: '12px',
+          marginTop: '4px'
         }}>
           {error}
         </div>

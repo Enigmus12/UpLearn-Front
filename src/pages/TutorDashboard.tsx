@@ -5,8 +5,9 @@ import '../styles/TutorDashboard.css';
 import { useAuthFlow } from '../utils/useAuthFlow';
 import DashboardSwitchButton from '../components/DashboardSwitchButton';
 import AddRoleButton from '../components/AddRoleButton';
-// import { useCognitoIntegration } from '../utils/useCognitoIntegration'; // COMENTADO: Ya no necesario
-
+import TutorAvailabilityPage from './TutorAvailabilityPage';
+import TutorClassesPage from './TutorClassesPage';
+// Definición de tipos
 interface User {
   userId: string;
   name: string;
@@ -16,7 +17,7 @@ interface User {
   specializations?: string[];
   credentials?: string[];
 }
-
+// Definición de tipos para datos simulados
 interface Student {
   id: string;
   name: string;
@@ -26,7 +27,7 @@ interface Student {
   status: 'active' | 'inactive';
   sessionsCompleted: number;
 }
-
+//  Definición de tipos para solicitudes y sesiones
 interface TutoringRequest {
   id: string;
   studentName: string;
@@ -36,7 +37,7 @@ interface TutoringRequest {
   status: 'pending' | 'accepted' | 'rejected';
   priority: 'low' | 'medium' | 'high';
 }
-
+// Definición de tipos para sesiones de tutoría
 interface TutoringSession {
   id: string;
   title: string;
@@ -44,26 +45,22 @@ interface TutoringSession {
   subject: string;
   date: string;
   time: string;
-  duration: number; // en minutos
+  duration: number;
   price: number;
   maxStudents: number;
   enrolledStudents: number;
   status: 'scheduled' | 'completed' | 'cancelled';
 }
-
+// Componente principal del dashboard del tutor
 const TutorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
   const { userRoles, isAuthenticated } = useAuthFlow();
-  
-  // COMENTADO: Hook para manejar la integración con Cognito (ya no necesario con useAuthFlow)
-  // const { isProcessing, processingError, isProcessed } = useCognitoIntegration();
-  
+  //  Estado del componente
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [activeSection, setActiveSection] = useState<'dashboard' | 'students' | 'requests' | 'sessions' | 'create-session'>('dashboard');
-
-  //  esto vendrá del backend
+  const [activeSection, setActiveSection] = useState<'dashboard' | 'students' | 'requests' | 'availability' | 'sessions' | 'create-session'>('dashboard');
+  // Datos simulados
   const [students] = useState<Student[]>([
     {
       id: '1',
@@ -93,7 +90,7 @@ const TutorDashboard: React.FC = () => {
       sessionsCompleted: 3
     }
   ]);
-
+  // Estado para solicitudes y sesiones
   const [requests, setRequests] = useState<TutoringRequest[]>([
     {
       id: '1',
@@ -123,7 +120,7 @@ const TutorDashboard: React.FC = () => {
       priority: 'low'
     }
   ]);
-
+  // Estado para sesiones de tutoría
   const [sessions, setSessions] = useState<TutoringSession[]>([
     {
       id: '1',
@@ -152,7 +149,7 @@ const TutorDashboard: React.FC = () => {
       status: 'scheduled'
     }
   ]);
-
+  // Estado para nueva sesión de tutoría
   const [newSession, setNewSession] = useState({
     title: '',
     description: '',
@@ -163,68 +160,65 @@ const TutorDashboard: React.FC = () => {
     price: 25000,
     maxStudents: 5
   });
-
+  // Efecto para verificar autenticación y cargar datos del usuario
   useEffect(() => {
-    // Verificar si el usuario está autenticado y es tutor usando Cognito
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
-
+    // Asegurarse de que el usuario tenga rol de tutor
     if (!userRoles || !userRoles.includes('tutor')) {
       navigate('/');
       return;
     }
-
-    // Obtener datos del usuario desde Cognito
+    // Cargar datos del usuario actual
     if (auth.user) {
       setCurrentUser({
         userId: auth.user.profile?.sub || 'unknown',
         name: auth.user.profile?.name || auth.user.profile?.nickname || 'Tutor',
         email: auth.user.profile?.email || 'No email',
         role: userRoles?.includes('tutor') ? 'tutor' : 'unknown',
-        bio: 'Tutor profesional en UpLearn', 
-        specializations: ['Matemáticas', 'Cálculo', 'Álgebra'], 
+        bio: 'Tutor profesional en UpLearn',
+        specializations: ['Matemáticas', 'Cálculo', 'Álgebra'],
         credentials: ['Profesional Certificado']
       });
     }
-  }, [isAuthenticated, userRoles, navigate]);
-
+  }, [isAuthenticated, userRoles, navigate, auth.user]);
+  // Manejadores de eventos
   const handleLogout = () => {
-    // Logout usando Cognito
     auth.removeUser();
     navigate('/login');
   };
-
+  // Redirección para cerrar sesión en Cognito
   const signOutRedirect = () => {
     const clientId = "lmk8qk12er8t8ql9phit3u12e";
     const logoutUri = "http://localhost:3000";
     const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
-    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
+    globalThis.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
-
+  // Manejador para editar perfil
   const handleEditProfile = () => {
     navigate('/edit-profile', { state: { currentRole: 'tutor' } });
   };
-
+  // Manejadores para solicitudes de tutoría
   const handleAcceptRequest = (requestId: string) => {
-    setRequests(prev => prev.map(req => 
-      req.id === requestId 
+    setRequests(prev => prev.map(req =>
+      req.id === requestId
         ? { ...req, status: 'accepted' as const }
         : req
     ));
     alert('Solicitud aceptada. El estudiante será notificado.');
   };
-
+  // Manejador para rechazar solicitud
   const handleRejectRequest = (requestId: string) => {
-    setRequests(prev => prev.map(req => 
-      req.id === requestId 
+    setRequests(prev => prev.map(req =>
+      req.id === requestId
         ? { ...req, status: 'rejected' as const }
         : req
     ));
     alert('Solicitud rechazada.');
   };
-
+  // Manejador para crear nueva sesión de tutoría
   const handleCreateSession = () => {
     if (newSession.title && newSession.subject && newSession.date && newSession.time) {
       const session: TutoringSession = {
@@ -247,7 +241,7 @@ const TutorDashboard: React.FC = () => {
       alert('Sesión de tutoría creada exitosamente!');
     }
   };
-
+  // Funciones para obtener colores según prioridad y estado
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high': return '#ef4444';
@@ -256,7 +250,7 @@ const TutorDashboard: React.FC = () => {
       default: return '#6b7280';
     }
   };
-
+  // Función para obtener colores según estado
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'accepted': return '#10b981';
@@ -270,7 +264,7 @@ const TutorDashboard: React.FC = () => {
       default: return '#6b7280';
     }
   };
-
+  // Renderizado del componente
   if (auth.isLoading) {
     return (
       <div style={{
@@ -284,7 +278,7 @@ const TutorDashboard: React.FC = () => {
       </div>
     );
   }
-
+  // Mostrar cargando si no hay usuario
   if (!currentUser) {
     return (
       <div style={{
@@ -307,33 +301,39 @@ const TutorDashboard: React.FC = () => {
           <div className="logo">
             <h2>UpLearn Tutor</h2>
           </div>
-          
+
           <nav className="main-nav">
-            <button 
+            <button
               className={`nav-item ${activeSection === 'dashboard' ? 'active' : ''}`}
               onClick={() => setActiveSection('dashboard')}
             >
               <span>📊</span> Dashboard
             </button>
-            <button 
+            <button
               className={`nav-item ${activeSection === 'students' ? 'active' : ''}`}
               onClick={() => setActiveSection('students')}
             >
               <span>👥</span> Mis Estudiantes
             </button>
-            <button 
+            <button
               className={`nav-item ${activeSection === 'requests' ? 'active' : ''}`}
               onClick={() => setActiveSection('requests')}
             >
               <span>📬</span> Solicitudes
             </button>
-            <button 
+            <button
+              className={`nav-item ${activeSection === 'availability' ? 'active' : ''}`}
+              onClick={() => setActiveSection('availability')}
+            >
+              <span>🗓️</span> Disponibilidad
+            </button>
+            <button
               className={`nav-item ${activeSection === 'sessions' ? 'active' : ''}`}
               onClick={() => setActiveSection('sessions')}
             >
               <span>🎓</span> Mis Clases
             </button>
-            <button 
+            <button
               className={`nav-item ${activeSection === 'create-session' ? 'active' : ''}`}
               onClick={() => setActiveSection('create-session')}
             >
@@ -344,52 +344,41 @@ const TutorDashboard: React.FC = () => {
           <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <DashboardSwitchButton currentRole="tutor" />
             <AddRoleButton currentRole="tutor" />
-            
+
             <div className="user-menu-container">
-            <button 
-              className="user-avatar"
-              onClick={() => setShowUserMenu(!showUserMenu)}
-            >
-              <span className="avatar-icon">👨‍🏫</span>
-              <span className="user-name">{currentUser.name}</span>
-              <span className="dropdown-arrow">▼</span>
-            </button>
-            
-            {showUserMenu && (
-              <div className="user-dropdown">
+              <button
+                className="user-avatar"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+              >
+                <span className="avatar-icon">👨‍🏫</span>
+                <span className="user-name">{currentUser.name}</span>
+                <span className="dropdown-arrow">▼</span>
+              </button>
+
+              {showUserMenu && (
+                <div className="user-dropdown">
                   <div className="user-info">
-                  <p className="user-email">{currentUser.email}</p>
-                  <p className="user-role">Tutor Profesional</p>
-                  <small style={{ color: '#666', fontSize: '0.8rem' }}>
-                    Autenticado con AWS Cognito
-                  </small>
-                  {/* Indicador de sincronización con backend */}
-                  <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
-                    {/* COMENTADO: Estado de sincronización ya no necesario con useAuthFlow */}
-                    {/* {isProcessing && (
-                      <span style={{ color: '#f59e0b' }}>🔄 Sincronizando con backend...</span>
-                    )}
-                    {isProcessed && !processingError && (
-                      <span style={{ color: '#10b981' }}>✅ Sincronizado con backend</span>
-                    )}
-                    {processingError && (
-                      <span style={{ color: '#ef4444' }}>⚠️ Error de sincronización</span>
-                    )} */}
-                    <span style={{ color: '#10b981' }}>✅ Conectado</span>
+                    <p className="user-email">{currentUser.email}</p>
+                    <p className="user-role">Tutor Profesional</p>
+                    <small style={{ color: '#666', fontSize: '0.8rem' }}>
+                      Autenticado con AWS Cognito
+                    </small>
+                    <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                      <span style={{ color: '#10b981' }}>✅ Conectado</span>
+                    </div>
                   </div>
+                  <div className="dropdown-divider"></div>
+                  <button className="dropdown-item" onClick={handleEditProfile}>
+                    <span>✏️</span> Editar Perfil
+                  </button>
+                  <button className="dropdown-item" onClick={handleLogout}>
+                    <span>🚪</span> Cerrar Sesión (Local)
+                  </button>
+                  <button className="dropdown-item logout" onClick={signOutRedirect}>
+                    <span>🔐</span> Cerrar Sesión (Cognito)
+                  </button>
                 </div>
-                <div className="dropdown-divider"></div>
-                <button className="dropdown-item" onClick={handleEditProfile}>
-                  <span>✏️</span> Editar Perfil
-                </button>
-                <button className="dropdown-item" onClick={handleLogout}>
-                  <span>🚪</span> Cerrar Sesión (Local)
-                </button>
-                <button className="dropdown-item logout" onClick={signOutRedirect}>
-                  <span>🔐</span> Cerrar Sesión (Cognito)
-                </button>
-              </div>
-            )}
+              )}
             </div>
           </div>
         </div>
@@ -401,7 +390,7 @@ const TutorDashboard: React.FC = () => {
         {activeSection === 'dashboard' && (
           <div className="dashboard-content">
             <h1>¡Bienvenido, {currentUser.name}! 👨‍🏫</h1>
-            
+
             <div className="stats-grid">
               <div className="stat-card">
                 <div className="stat-icon">👥</div>
@@ -410,7 +399,7 @@ const TutorDashboard: React.FC = () => {
                   <p>Estudiantes Totales</p>
                 </div>
               </div>
-              
+
               <div className="stat-card">
                 <div className="stat-icon">📬</div>
                 <div className="stat-info">
@@ -418,7 +407,7 @@ const TutorDashboard: React.FC = () => {
                   <p>Solicitudes Pendientes</p>
                 </div>
               </div>
-              
+
               <div className="stat-card">
                 <div className="stat-icon">🎓</div>
                 <div className="stat-info">
@@ -426,7 +415,7 @@ const TutorDashboard: React.FC = () => {
                   <p>Clases Programadas</p>
                 </div>
               </div>
-              
+
               <div className="stat-card">
                 <div className="stat-icon">💰</div>
                 <div className="stat-info">
@@ -469,7 +458,7 @@ const TutorDashboard: React.FC = () => {
         {activeSection === 'students' && (
           <div className="students-section">
             <h1>Mis Estudiantes 👥</h1>
-            
+
             <div className="students-grid">
               {students.map(student => (
                 <div key={student.id} className="student-card">
@@ -478,7 +467,7 @@ const TutorDashboard: React.FC = () => {
                     <div className="student-info">
                       <h3>{student.name}</h3>
                       <p className="student-email">{student.email}</p>
-                      <span 
+                      <span
                         className="status-badge"
                         style={{ color: getStatusColor(student.status) }}
                       >
@@ -486,13 +475,13 @@ const TutorDashboard: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="student-details">
                     <p><strong>Nivel:</strong> {student.educationLevel}</p>
                     <p><strong>Se unió:</strong> {student.joinDate}</p>
                     <p><strong>Sesiones completadas:</strong> {student.sessionsCompleted}</p>
                   </div>
-                  
+
                   <div className="student-actions">
                     <button className="btn-primary">Enviar Mensaje</button>
                     <button className="btn-secondary">Ver Historial</button>
@@ -507,44 +496,44 @@ const TutorDashboard: React.FC = () => {
         {activeSection === 'requests' && (
           <div className="requests-section">
             <h1>Solicitudes de Tutoría 📬</h1>
-            
+
             <div className="requests-grid">
               {requests.map(request => (
                 <div key={request.id} className="request-card">
                   <div className="request-header">
                     <h3>{request.studentName}</h3>
                     <div className="request-meta">
-                      <span 
+                      <span
                         className="priority-badge"
                         style={{ backgroundColor: getPriorityColor(request.priority) }}
                       >
                         {request.priority.toUpperCase()}
                       </span>
-                      <span 
+                      <span
                         className="status-badge"
                         style={{ color: getStatusColor(request.status) }}
                       >
-                        {request.status === 'pending' ? 'PENDIENTE' : 
-                         request.status === 'accepted' ? 'ACEPTADA' : 'RECHAZADA'}
+                        {request.status === 'pending' ? 'PENDIENTE' :
+                          request.status === 'accepted' ? 'ACEPTADA' : 'RECHAZADA'}
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="request-content">
                     <p><strong>Materia:</strong> {request.subject}</p>
                     <p><strong>Descripción:</strong> {request.description}</p>
                     <p><strong>Fecha:</strong> {request.requestDate}</p>
                   </div>
-                  
+
                   {request.status === 'pending' && (
                     <div className="request-actions">
-                      <button 
+                      <button
                         className="btn-primary"
                         onClick={() => handleAcceptRequest(request.id)}
                       >
                         Aceptar
                       </button>
-                      <button 
+                      <button
                         className="btn-danger"
                         onClick={() => handleRejectRequest(request.id)}
                       >
@@ -558,88 +547,54 @@ const TutorDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Sessions Section */}
+        {/* Availability Section */}
+        {activeSection === 'availability' && (
+          <TutorAvailabilityPage />
+        )}
+
+        {/* Sessions Section - AHORA USA EL COMPONENTE REAL */}
         {activeSection === 'sessions' && (
-          <div className="sessions-section">
-            <h1>Mis Clases 🎓</h1>
-            
-            <div className="sessions-grid">
-              {sessions.map(session => (
-                <div key={session.id} className="session-card">
-                  <div className="session-header">
-                    <h3>{session.title}</h3>
-                    <span 
-                      className="status-badge"
-                      style={{ color: getStatusColor(session.status) }}
-                    >
-                      {session.status === 'scheduled' ? 'PROGRAMADA' : 
-                       session.status === 'completed' ? 'COMPLETADA' : 'CANCELADA'}
-                    </span>
-                  </div>
-                  
-                  <p className="session-description">{session.description}</p>
-                  
-                  <div className="session-details">
-                    <div className="session-info">
-                      <p><strong>📚 Materia:</strong> {session.subject}</p>
-                      <p><strong>📅 Fecha:</strong> {session.date}</p>
-                      <p><strong>🕐 Hora:</strong> {session.time}</p>
-                      <p><strong>⏱️ Duración:</strong> {session.duration} min</p>
-                    </div>
-                    <div className="session-stats">
-                      <p><strong>💰 Precio:</strong> ${session.price.toLocaleString()}</p>
-                      <p><strong>👥 Estudiantes:</strong> {session.enrolledStudents}/{session.maxStudents}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="session-actions">
-                    <button className="btn-primary">Ver Detalles</button>
-                    <button className="btn-secondary">Editar</button>
-                    {session.status === 'scheduled' && (
-                      <button className="btn-danger">Cancelar</button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <TutorClassesPage />
         )}
 
         {/* Create Session Section */}
         {activeSection === 'create-session' && (
           <div className="create-session-section">
             <h1>Crear Nueva Clase ➕</h1>
-            
+
             <div className="session-form-container">
               <div className="session-form">
                 <div className="form-group">
-                  <label>Título de la Clase</label>
+                  <label htmlFor="session-title">Título de la Clase</label>
                   <input
+                    id="session-title"
                     type="text"
                     value={newSession.title}
-                    onChange={(e) => setNewSession({...newSession, title: e.target.value})}
+                    onChange={(e) => setNewSession({ ...newSession, title: e.target.value })}
                     placeholder="Ej: Introducción al Cálculo Diferencial"
                     className="form-input"
                   />
                 </div>
-                
+
                 <div className="form-group">
-                  <label>Descripción</label>
+                  <label htmlFor="session-description">Descripción</label>
                   <textarea
+                    id="session-description"
                     value={newSession.description}
-                    onChange={(e) => setNewSession({...newSession, description: e.target.value})}
+                    onChange={(e) => setNewSession({ ...newSession, description: e.target.value })}
                     placeholder="Describe los temas que se cubrirán..."
                     className="form-textarea"
                     rows={3}
                   />
                 </div>
-                
+
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Materia</label>
+                    <label htmlFor="session-subject">Materia</label>
                     <select
+                      id="session-subject"
                       value={newSession.subject}
-                      onChange={(e) => setNewSession({...newSession, subject: e.target.value})}
+                      onChange={(e) => setNewSession({ ...newSession, subject: e.target.value })}
                       className="form-select"
                     >
                       <option value="">Seleccionar materia</option>
@@ -650,34 +605,37 @@ const TutorDashboard: React.FC = () => {
                       <option value="Inglés">Inglés</option>
                     </select>
                   </div>
-                  
+
                   <div className="form-group">
-                    <label>Fecha</label>
+                    <label htmlFor="session-date">Fecha</label>
                     <input
+                      id="session-date"
                       type="date"
                       value={newSession.date}
-                      onChange={(e) => setNewSession({...newSession, date: e.target.value})}
+                      onChange={(e) => setNewSession({ ...newSession, date: e.target.value })}
                       className="form-input"
                     />
                   </div>
                 </div>
-                
+
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Hora</label>
+                    <label htmlFor="session-time">Hora</label>
                     <input
+                      id="session-time"
                       type="time"
                       value={newSession.time}
-                      onChange={(e) => setNewSession({...newSession, time: e.target.value})}
+                      onChange={(e) => setNewSession({ ...newSession, time: e.target.value })}
                       className="form-input"
                     />
                   </div>
-                  
+
                   <div className="form-group">
-                    <label>Duración (minutos)</label>
+                    <label htmlFor="session-duration">Duración (minutos)</label>
                     <select
+                      id="session-duration"
                       value={newSession.duration}
-                      onChange={(e) => setNewSession({...newSession, duration: parseInt(e.target.value)})}
+                      onChange={(e) => setNewSession({ ...newSession, duration: Number.parseInt(e.target.value) })}
                       className="form-select"
                     >
                       <option value={30}>30 minutos</option>
@@ -687,25 +645,27 @@ const TutorDashboard: React.FC = () => {
                     </select>
                   </div>
                 </div>
-                
+
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Precio ($)</label>
+                    <label htmlFor="session-price">Precio ($)</label>
                     <input
+                      id="session-price"
                       type="number"
                       value={newSession.price}
-                      onChange={(e) => setNewSession({...newSession, price: parseInt(e.target.value)})}
+                      onChange={(e) => setNewSession({ ...newSession, price: Number.parseInt(e.target.value) })}
                       className="form-input"
                       min="10000"
                       step="5000"
                     />
                   </div>
-                  
+
                   <div className="form-group">
-                    <label>Máximo de Estudiantes</label>
+                    <label htmlFor="max-students">Máximo de Estudiantes</label>
                     <select
+                      id="max-students"
                       value={newSession.maxStudents}
-                      onChange={(e) => setNewSession({...newSession, maxStudents: parseInt(e.target.value)})}
+                      onChange={(e) => setNewSession({ ...newSession, maxStudents: Number.parseInt(e.target.value) })}
                       className="form-select"
                     >
                       <option value={1}>1 estudiante</option>
@@ -716,15 +676,15 @@ const TutorDashboard: React.FC = () => {
                     </select>
                   </div>
                 </div>
-                
+
                 <div className="form-actions">
-                  <button 
+                  <button
                     className="btn-primary btn-large"
                     onClick={handleCreateSession}
                   >
                     Crear Clase
                   </button>
-                  <button 
+                  <button
                     className="btn-secondary"
                     onClick={() => setNewSession({
                       title: '', description: '', subject: '', date: '', time: '',
