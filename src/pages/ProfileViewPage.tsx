@@ -1,150 +1,204 @@
 import React, { useMemo } from 'react';
-import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from 'react-oidc-context';
 import '../styles/EditProfilePage.css';
 
 type RoleView = 'student' | 'tutor';
 
 interface ProfileState {
-    // viene desde la navegación
-    profile?: {
-        userId?: string;
-        name?: string;
-        email?: string;
-        phoneNumber?: string;
-        idType?: string;
-        idNumber?: string;
-        // student
-        educationLevel?: string;
-        // tutor
-        bio?: string;
-        specializations?: string[];
-        credentials?: string[];
-    };
+  profile?: {
+    userId?: string;
+    sub?: string;
+    name?: string;
+    email?: string;
+    phoneNumber?: string;
+    idType?: string;
+    idNumber?: string;
+    // student
+    educationLevel?: string;
+    // tutor
+    bio?: string;
+    specializations?: string[];
+    credentials?: string[];
+  };
 }
-// Página para ver el perfil de otro usuario (tutor o estudiante)
+
 const ProfileViewPage: React.FC = () => {
-    const { role } = useParams<{ role: RoleView }>();
-    const location = useLocation();
-    const navigate = useNavigate();
+  const { role } = useParams<{ role: RoleView }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const auth = useAuth();
 
-    const auth = useAuth();
+  const state = location.state as ProfileState | undefined;
+  const profile = useMemo(() => state?.profile ?? {}, [state]);
 
-    // Preferimos datos enviados por navegación (desde tarjetas/buscador)
-    const state = location.state as ProfileState | undefined;
-    const profile = useMemo(() => state?.profile ?? {}, [state]);
-    // Si no hay datos en el estado, podríamos cargar desde API (no implementado aquí)
-    const effectiveRole: RoleView = (role === 'tutor' || role === 'student') ? role : 'tutor';
-    // Datos básicos
-    const fullName = profile.name ?? auth.user?.profile?.name ?? 'Usuario';
+  const effectiveRole: RoleView = role === 'student' || role === 'tutor' ? role : 'tutor';
 
+  const fullName = profile.name ?? auth.user?.profile?.name ?? 'Usuario';
+  const email = profile.email ?? auth.user?.profile?.email ?? '';
+  const phone = profile.phoneNumber ?? '';
+  const idType = profile.idType ?? '';
+  const idNumber = profile.idNumber ?? '';
 
-    return (
-        <div className="edit-profile-container">
-            <div className="edit-profile-content">
-                <div className="profile-header">
-                    <h1>Perfil</h1>
-                    <p>Información del usuario</p>
-                    <div className="user-role-badge">
-                        {effectiveRole === 'student' ? '🎓 Estudiante' : '👨‍🏫 Tutor'}
-                    </div>
-                </div>
+  // Puede reservar si está viendo un PERFIL DE TUTOR y hay algún id
+  const tutorEffectiveId = (profile.userId || profile.sub || '').trim();
+  const canReserve = effectiveRole === 'tutor' && !!tutorEffectiveId;
 
-                {/* Reutiliza los estilos de EditProfilePage pero en solo-lectura */}
-                <form className="profile-form" onSubmit={(e) => e.preventDefault()}>
-                    <div className="form-section">
-                        <h2>Información Personal</h2>
+  const handleBack = () => navigate(-1);
 
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="fullName">Nombre Completo</label>
-                            <input id="fullName" name="fullName" className="form-input" value={fullName} disabled readOnly />
-                        </div>
+  const handleReserve = () => {
+    const id = tutorEffectiveId;
+    if (!id) {
+      alert('No se pudo identificar al tutor para reservar.');
+      return;
+    }
+    navigate(`/book/${encodeURIComponent(id)}`, { state: { tutor: profile, role: 'tutor' } });
+  };
 
-                    </div>
-
-                    {effectiveRole === 'student' && (
-                        <div className="form-section">
-                            <h2>Información Académica</h2>
-                            <div className="form-group">
-                                <label className="form-label" htmlFor="educationLevel">Nivel Educativo</label>
-                                <input id="educationLevel" name="educationLevel" className="form-input" value={profile.educationLevel ?? '—'} disabled readOnly />
-                            </div>
-                        </div>
-                    )}
-
-                    {effectiveRole === 'tutor' && (
-                        <div className="form-section">
-                            <h2>Información Profesional</h2>
-
-                            {profile.bio && (
-                                <div className="form-group">
-                                    <label className="form-label" htmlFor="bio">Biografía</label>
-                                    <textarea id="bio" className="form-input form-textarea" value={profile.bio} disabled readOnly rows={4} />
-                                </div>
-                            )}
-
-                            <div className="form-group">
-                                <label htmlFor="specializations" className="form-label">Especializaciones</label>
-                                <div className="tags-container">
-                                    {profile.specializations?.length
-                                        ? (
-                                            <>
-                                                {profile.specializations.map((s) => <span key={s} className="tag">{s}</span>)}
-                                                <input
-                                                    id="specializations"
-                                                    className="form-input"
-                                                    value={profile.specializations.join(', ')}
-                                                    readOnly
-                                                    aria-hidden="true"
-                                                    tabIndex={-1}
-                                                    style={{ position: 'absolute', left: '-10000px' }}
-                                                />
-                                            </>
-                                        )
-                                        : <input id="specializations" className="form-input" value="—" disabled readOnly />
-                                    }
-                                </div>
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="credentials" className="form-label">Credenciales</label>
-                                <div className="tags-container">
-                                    {profile.credentials?.length
-                                        ? (
-                                            <>
-                                                {profile.credentials.map((c) => <span key={c} className="tag">{c}</span>)}
-                                                <input
-                                                    id="credentials"
-                                                    className="form-input"
-                                                    value={profile.credentials.join(', ')}
-                                                    readOnly
-                                                    aria-hidden="true"
-                                                    tabIndex={-1}
-                                                    style={{ position: 'absolute', left: '-10000px' }}
-                                                />
-                                            </>
-                                        )
-                                        : <input id="credentials" className="form-input" value="—" disabled readOnly />
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="form-actions" style={{ justifyContent: 'flex-end' }}>
-                        <div className="main-actions">
-                            <button type="button" className="btn btn-primary" >
-                                Contactar
-                            </button>
-                            <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
-                                Volver
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
+  return (
+    <div className="edit-profile-container">
+      <div className="edit-profile-content">
+        <div className="profile-header">
+          <h1>Perfil</h1>
+          <p>Información del usuario</p>
+          <div className="user-role-badge">
+            {effectiveRole === 'student' ? '🎓 Estudiante' : '👨‍🏫 Tutor'}
+          </div>
         </div>
-    );
+
+        <div className="profile-top-strip" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div
+            aria-hidden
+            style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #7C3AED 0%, #6366F1 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontWeight: 800, fontSize: 20
+            }}
+            title={fullName}
+          >
+            {fullName.trim().charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700 }}>{fullName}</div>
+            {email && <div style={{ fontSize: 12, color: '#6B7280' }}>{email}</div>}
+          </div>
+        </div>
+
+        <form className="profile-form" onSubmit={(e) => e.preventDefault()}>
+          <div className="form-section">
+            <h2>Información Personal</h2>
+
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label className="form-label" htmlFor="fullName">Nombre Completo</label>
+                <input id="fullName" className="form-input" value={fullName} disabled readOnly />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="email">Correo</label>
+                <input id="email" className="form-input" value={email || '—'} disabled readOnly />
+              </div>
+            </div>
+
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label className="form-label" htmlFor="phone">Teléfono</label>
+                <input id="phone" className="form-input" value={phone || '—'} disabled readOnly />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="idType">Identificación</label>
+                <input
+                  id="idType"
+                  className="form-input"
+                  value={(idType && idNumber) ? `${idType}: ${idNumber}` : (idType || idNumber || '—')}
+                  disabled
+                  readOnly
+                />
+              </div>
+            </div>
+          </div>
+
+          {effectiveRole === 'student' && (
+            <div className="form-section">
+              <h2>Información Académica</h2>
+              <div className="form-group">
+                <label className="form-label" htmlFor="educationLevel">Nivel Educativo</label>
+                <input
+                  id="educationLevel"
+                  className="form-input"
+                  value={(profile as any).educationLevel ?? '—'}
+                  disabled
+                  readOnly
+                />
+              </div>
+            </div>
+          )}
+
+          {effectiveRole === 'tutor' && (
+            <div className="form-section">
+              <h2>Información Profesional</h2>
+
+              {!!(profile as any).bio && (
+                <div className="form-group">
+                  <label className="form-label" htmlFor="bio">Biografía</label>
+                  <textarea id="bio" className="form-input form-textarea" value={(profile as any).bio} disabled readOnly rows={4} />
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="specializations" className="form-label">Especializaciones</label>
+                <div className="tags-container">
+                  {Array.isArray((profile as any).specializations) && (profile as any).specializations.length > 0 ? (
+                    <>
+                      {(profile as any).specializations.map((s: string) => (
+                        <span key={s} className="tag">{s}</span>
+                      ))}
+                      <input id="specializations" className="form-input" value={(profile as any).specializations.join(', ')} readOnly aria-hidden="true" tabIndex={-1} style={{ position: 'absolute', left: '-10000px' }} />
+                    </>
+                  ) : (
+                    <input id="specializations" className="form-input" value="—" disabled readOnly />
+                  )}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="credentials" className="form-label">Credenciales</label>
+                <div className="tags-container">
+                  {Array.isArray((profile as any).credentials) && (profile as any).credentials.length > 0 ? (
+                    <>
+                      {(profile as any).credentials.map((c: string) => (
+                        <span key={c} className="tag">{c}</span>
+                      ))}
+                      <input id="credentials" className="form-input" value={(profile as any).credentials.join(', ')} readOnly aria-hidden="true" tabIndex={-1} style={{ position: 'absolute', left: '-10000px' }} />
+                    </>
+                  ) : (
+                    <input id="credentials" className="form-input" value="—" disabled readOnly />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="form-actions" style={{ justifyContent: 'flex-end' }}>
+            <div className="main-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+
+              {canReserve && (
+                <button type="button" className="btn btn-primary" onClick={handleReserve}>
+                  Reservar Cita
+                </button>
+              )}
+
+              <button type="button" className="btn btn-secondary" onClick={handleBack}>
+                Volver
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 };
 
 export default ProfileViewPage;

@@ -26,7 +26,7 @@ function addDays(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
   dt.setUTCDate(dt.getUTCDate() + days);
-  return dt.toISOString().slice(0, 10); // seguro en UTC
+  return dt.toISOString().slice(0, 10); 
 }
 /** Genera lista de horas (00:00 a 23:00) */
 function hours(): string[] {
@@ -36,7 +36,6 @@ function hours(): string[] {
   }
   return arr;
 }
-/** Clase CSS según estado de celda. */
 function classForStatus(status: CellStatus | undefined | null): string {
   switch (status) {
     case 'DISPONIBLE': return 'cell available';
@@ -45,6 +44,7 @@ function classForStatus(status: CellStatus | undefined | null): string {
     case 'ACEPTADO':   return 'cell accepted';
     case 'CANCELADO':  return 'cell canceled';
     case 'VENCIDA':    return 'cell expired';   // slots pasados (rosa)
+    case 'INCUMPLIDA': return 'cell failed';    // slots incumplidos (rojo)
     default:           return 'cell disabled';
   }
 }
@@ -58,6 +58,7 @@ function getStatusLabel(status: CellStatus | undefined | null): string {
     case 'ACEPTADO':   return 'Aceptada';
     case 'CANCELADO':  return 'Cancelada';
     case 'VENCIDA':    return 'Vencida';
+    case 'INCUMPLIDA': return 'Incumplida';
     default:           return '';
   }
 }
@@ -65,14 +66,13 @@ function getStatusLabel(status: CellStatus | undefined | null): string {
 const H_LIST = hours();
 /** Componente de calendario semanal */
 const WeekCalendar: React.FC<WeekCalendarProps> = ({
-  weekStart, cells, mode, selectedKeys, onToggle, onSinglePick
+  weekStart, cells, mode, selectedKeys, onToggle, onSinglePick, onPrevWeek, onNextWeek, onClear
 }) => {
   const days = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   }, [weekStart]);
   // Mapa de celdas
   const map = useMemo(() => {
-    // ✅ PRIORIDADES COMPLETAS (incluye PENDIENTE y VENCIDA; ACTIVA como legacy)
     const priority: Record<Exclude<CellStatus, null>, number> = {
       ACEPTADO: 4,
       PENDIENTE: 3,
@@ -80,6 +80,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
       DISPONIBLE: 2,
       CANCELADO: 1,
       VENCIDA: 0,
+      INCUMPLIDA: 0
     };
     const pr = (s: CellStatus | null | undefined) => (s ? priority[s] ?? 0 : 0);
     // unificamos por (date,hour) quedándonos con el de mayor prioridad
@@ -182,6 +183,11 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
 
   return (
     <fieldset className="calendar-wrapper" aria-label="Week calendar">
+      <div className="calendar-controls" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <button type="button" onClick={() => onPrevWeek?.()} className="ctrl-btn">Prev</button>
+        <button type="button" onClick={() => onNextWeek?.()} className="ctrl-btn">Next</button>
+        <button type="button" onClick={() => onClear?.()} className="ctrl-btn">Clear</button>
+      </div>
       <div className="calendar-grid">
         <div className="col hour-col">
           <div className="head-cell">Hora</div>

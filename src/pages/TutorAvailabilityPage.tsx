@@ -1,4 +1,3 @@
-// src/pages/TutorAvailabilityPage.tsx
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from 'react-oidc-context';
 import WeekCalendar from '../components/WeekCalendar';
@@ -11,7 +10,7 @@ import {
 } from '../service/Api-scheduler';
 import '../styles/Calendar.css';
 
-// === Utilidades de fecha/hora ===
+// Utilidades de fecha/hora
 function mondayOf(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
@@ -55,9 +54,9 @@ function isSelectable(dateISO: string, hhmm: string): boolean {
   return dt.getTime() >= cutoff.getTime();
 }
 
-// === Tipos ===
+// Tipos 
 type OperationMode = 'add' | 'delete';
-// === Componente principal ===
+// Componente principal
 const TutorAvailabilityPage: React.FC = () => {
   const auth = useAuth();
   const token = (auth.user as any)?.id_token ?? auth.user?.access_token;
@@ -101,7 +100,7 @@ const TutorAvailabilityPage: React.FC = () => {
     return m;
   }, [cells]);
 
-  // === ignora pasado y estados no válidos ===
+  // ignora pasado y estados no válidos 
   const toggle = (key: string) => {
     const [date, hhmm] = key.split('_');
     if (!isSelectable(date, hhmm)) {
@@ -155,7 +154,7 @@ const TutorAvailabilityPage: React.FC = () => {
     return m;
   }, [selected]);
 
-  // === Confirmar AGREGAR ===
+  // Confirmar AGREGAR
   const confirmAdd = async () => {
     if (byDay.size === 0) {
       setMessage('⚠️ Selecciona una o más horas FUTURAS para agregar.');
@@ -215,7 +214,7 @@ const TutorAvailabilityPage: React.FC = () => {
     }
   };
 
-  // === Confirmar ELIMINAR ===
+  // Confirmar ELIMINAR 
   const confirmDelete = async () => {
     if (selected.size === 0) {
       setMessage('⚠️ Selecciona una o más horas DISPONIBLES futuras para eliminar.');
@@ -264,7 +263,7 @@ const TutorAvailabilityPage: React.FC = () => {
           });
           if (!res.ok) throw new Error(await res.text());
         } else {
-          // ✅ día sin horas restantes → DELETE del día
+          // día sin horas restantes → DELETE del día
           await clearDayAvailability(date, token);
         }
       }
