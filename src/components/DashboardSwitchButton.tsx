@@ -4,11 +4,12 @@ import { useDashboardSwitch } from '../utils/useDashboardSwitch';
 interface DashboardSwitchButtonProps {
   currentRole: 'student' | 'tutor';
   className?: string;
+  asMenuItem?: boolean; // Nueva prop para renderizar como item de menú
 }
-
 const DashboardSwitchButton: React.FC<DashboardSwitchButtonProps> = ({
   currentRole,
-  className = ''
+  className = '',
+  asMenuItem = false
 }) => {
   const { switchToDashboard, canSwitchTo, isLoading, error } = useDashboardSwitch();
   const [canSwitch, setCanSwitch] = useState(false);
@@ -24,6 +25,11 @@ const DashboardSwitchButton: React.FC<DashboardSwitchButtonProps> = ({
     };
 
     checkPermissions();
+    
+    // Recargar cada 2 segundos para detectar cambios en los roles
+    const interval = setInterval(checkPermissions, 2000);
+    
+    return () => clearInterval(interval);
   }, [targetRole, canSwitchTo]);
 
   const handleSwitch = async () => {
@@ -35,6 +41,20 @@ const DashboardSwitchButton: React.FC<DashboardSwitchButtonProps> = ({
     return null;
   }
 
+  // Renderizar como item de menú desplegable
+  if (asMenuItem) {
+    return (
+      <button
+        className={`dropdown-item ${className}`}
+        onClick={handleSwitch}
+        disabled={isLoading}
+      >
+        <span>{targetIcon}</span> {isLoading ? 'Cambiando...' : `Ir a ${targetRoleText}`}
+      </button>
+    );
+  }
+
+  // Renderizar como botón normal (versión anterior)
   return (
     <div className="dashboard-switch-container">
       <button

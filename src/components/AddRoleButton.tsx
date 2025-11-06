@@ -4,11 +4,13 @@ import { useAddRole } from '../utils/useAddRole';
 interface AddRoleButtonProps {
   currentRole: 'student' | 'tutor';
   className?: string;
+  asMenuItem?: boolean; // Nueva prop para renderizar como item de menú
 }
 
 const AddRoleButton: React.FC<AddRoleButtonProps> = ({
   currentRole,
-  className = ''
+  className = '',
+  asMenuItem = false
 }) => {
   const { addRole, canAddRole, isLoading, error, success, clearMessages } = useAddRole();
   const [canAdd, setCanAdd] = useState(false);
@@ -36,6 +38,12 @@ const AddRoleButton: React.FC<AddRoleButtonProps> = ({
         setShowMessage(false);
         clearMessages();
       }, 5000);
+      
+      // Si fue exitoso, recargar permisos inmediatamente
+      if (success) {
+        const canAddResult = await canAddRole(targetRole);
+        setCanAdd(canAddResult);
+      }
     }
   };
 
@@ -44,6 +52,20 @@ const AddRoleButton: React.FC<AddRoleButtonProps> = ({
     return null;
   }
 
+  // Renderizar como item de menú desplegable
+  if (asMenuItem) {
+    return (
+      <button
+        className={`dropdown-item ${className}`}
+        onClick={handleAddRole}
+        disabled={isLoading}
+      >
+        <span>{targetIcon}</span> {isLoading ? 'Añadiendo...' : `Ser ${targetRoleText}`}
+      </button>
+    );
+  }
+
+  // Renderizar como botón normal (versión anterior)
   return (
     <div className="add-role-container">
       <button

@@ -4,6 +4,7 @@ import { useAuth } from "react-oidc-context";
 import '../styles/StudentDashboard.css';
 import '../styles/Calendar.css';
 import { useAuthFlow } from '../utils/useAuthFlow';
+import { useProfileStatus } from '../utils/useProfileStatus';
 import ApiSearchService from '../service/Api-search';
 import {
   getMyReservations,
@@ -12,6 +13,7 @@ import {
 } from '../service/Api-scheduler';
 import DashboardSwitchButton from '../components/DashboardSwitchButton';
 import AddRoleButton from '../components/AddRoleButton';
+import ProfileIncompleteNotification from '../components/ProfileIncompleteNotification';
 import { ENV } from '../utils/env';
 
 // Utils fecha
@@ -105,6 +107,10 @@ const StudentDashboard: React.FC = () => {
   }, [auth.isAuthenticated, auth.user]);
   // Hook de flujo de autenticación
   const { userRoles, isAuthenticated, needsRoleSelection } = useAuthFlow();
+  
+  // Hook de verificación de perfil
+  const { isProfileComplete, missingFields } = useProfileStatus();
+  const [showProfileNotification, setShowProfileNotification] = useState(true);
 
   // Estado general
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -264,8 +270,11 @@ const StudentDashboard: React.FC = () => {
   };
 
   // Sesión
-  const handleLogout = () => { auth.removeUser(); navigate('/login'); };
-  const signOutRedirect = () => {
+  const handleLogout = async () => {
+    // Cerrar sesión local primero
+    auth.removeUser();
+    
+    // Luego redirigir a Cognito para cerrar sesión
     const clientId = "lmk8qk12er8t8ql9phit3u12e";
     const logoutUri = "http://localhost:3000";
     const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
@@ -292,6 +301,15 @@ const StudentDashboard: React.FC = () => {
 
   return (
     <div className="dashboard-container">
+      {/* Notificación de perfil incompleto */}
+      {!isProfileComplete && showProfileNotification && missingFields && (
+        <ProfileIncompleteNotification
+          missingFields={missingFields}
+          currentRole="student"
+          onDismiss={() => setShowProfileNotification(false)}
+        />
+      )}
+      
       {/* Header */}
       <header className="dashboard-header">
         <div className="header-content">
@@ -304,8 +322,6 @@ const StudentDashboard: React.FC = () => {
             <button className={`nav-item ${activeSection === 'post-task' ? 'active' : ''}`} onClick={() => setActiveSection('post-task')}><span>➕</span> Publicar Tarea</button>
           </nav>
           <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <DashboardSwitchButton currentRole="student" />
-            <AddRoleButton currentRole="student" />
             <div className="user-menu-container">
               <button className="user-avatar" onClick={() => setShowUserMenu(!showUserMenu)}>
                 <span className="avatar-icon">👤</span>
@@ -316,12 +332,19 @@ const StudentDashboard: React.FC = () => {
                 <div className="user-dropdown">
                   <div className="user-info">
                     <p className="user-email">{currentUser.email}</p>
-                    <p className="user-role">Estudiante - {currentUser.educationLevel}</p>
+                    <p className="user-role">Estudiante</p>
+                    <small style={{ color: '#4b5563', fontSize: '0.8rem', fontWeight: '500' }}>
+                      Autenticado con AWS Cognito
+                    </small>
+                    <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                      <span style={{ color: '#059669', fontWeight: '600' }}>✅ Conectado</span>
+                    </div>
                   </div>
                   <div className="dropdown-divider"></div>
                   <button className="dropdown-item" onClick={handleEditProfile}><span>✏️</span> Editar Perfil</button>
-                  <button className="dropdown-item" onClick={handleLogout}><span>🚪</span> Cerrar Sesión (Local)</button>
-                  <button className="dropdown-item logout" onClick={signOutRedirect}><span>🔐</span> Cerrar Sesión (Cognito)</button>
+                  <AddRoleButton currentRole="student" asMenuItem={true} />
+                  <DashboardSwitchButton currentRole="student" asMenuItem={true} />
+                  <button className="dropdown-item logout" onClick={handleLogout}><span>🚪</span> Cerrar Sesión</button>
                 </div>
               )}
             </div>
