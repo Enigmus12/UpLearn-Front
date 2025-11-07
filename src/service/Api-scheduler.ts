@@ -1,46 +1,56 @@
 /**
- * API client for the student-tutor-scheduler microservice (sin gateway).
- * Puedes sobreescribir con REACT_APP_SCHEDULER_API_BASE.
+ * API client for the student-tutor-scheduler microservice .
  */
 
 export type CellStatus =
   | 'DISPONIBLE'
-  | 'PENDIENTE'  
+  | 'PENDIENTE'
   | 'ACEPTADO'
   | 'CANCELADO'
-  | 'VENCIDA'     
-  | 'ACTIVA'     
+  | 'VENCIDA'
+  | 'ACTIVA'
+  | 'INCUMPLIDA'
+  | 'FINALIZADA'
   | null;
 
 export interface ScheduleCell {
   date: string;      // YYYY-MM-DD
-  hour: string;      // HH:mm (24h)
+  hour: string;      // HH:mm
   status: CellStatus;
   reservationId?: string | null;
+  tutorId?: string | null;
   studentId?: string | null;
-}
-/** Reserva */
-export interface Reservation {
-  id: string;
-  tutorId: string;
-  studentId: string;
-  date: string;      // YYYY-MM-DD
-  start: string;     // HH:mm[:ss]
-  end: string;       // HH:mm[:ss]
-  status: CellStatus; // mismo conjunto de estados
-  createdAt?: string;
-  updatedAt?: string;
-  // Enriquecidos desde backend (si existen)
+
+  // enriquecidos opcionales
   studentName?: string;
   studentAvatar?: string;
   tutorName?: string;
   tutorAvatar?: string;
 }
 
+/** Reserva */
+export interface Reservation {
+  id: string;
+  tutorId: string;
+  studentId: string;
+  date: string;   // YYYY-MM-DD
+  start: string;  // HH:mm:ss o HH:mm
+  end: string;    // HH:mm:ss o HH:mm
+  status: 'PENDIENTE' | 'ACEPTADO' | 'CANCELADO' | 'ACTIVA' | 'INCUMPLIDA' | 'FINALIZADA';
+  attended?: boolean | null;
+
+  // enriquecidos (views)
+  studentName?: string;
+  studentAvatar?: string;
+  tutorName?: string;
+  tutorAvatar?: string;
+}
+
+
 const DEFAULT_BASE = 'http://localhost:8090';
 const BASE = (process.env.REACT_APP_SCHEDULER_API_BASE || DEFAULT_BASE).replace(/\/$/, '');
 
-/* ===== utilidades internas ===== */
+/* utilidades internas  */
 function norm(h: string) {
   const s = (h ?? '').trim();
   const m = /^(\d{1,2}):(\d{2})/.exec(s);
@@ -64,7 +74,7 @@ async function handle(res: Response) {
   return res.json();
 }
 
-/* ===== fechas ===== */
+/*  fechas */
 function slotToLocalDate(dateISO: string, hhmm: string): Date {
   const [H, M] = norm(hhmm).split(':').map(Number);
   const dt = new Date(`${dateISO}T00:00:00`);
@@ -77,17 +87,27 @@ function isPastSlot(dateISO: string, hhmm: string): boolean {
   return slotToLocalDate(dateISO, hhmm).getTime() < now.getTime();
 }
 
-/* ===== normalizaciones ===== */
+/* normalizaciones */
 function normalizeCellStatus(s: CellStatus | null | undefined): Exclude<CellStatus, 'ACTIVA'> | null {
   if (s === 'ACTIVA') return 'PENDIENTE';
   return (s ?? null) as any;
 }
-function normalizeReservationStatus(s: CellStatus | null | undefined): CellStatus {
-  if (s === 'ACTIVA') return 'PENDIENTE';
-  return (s ?? null) as CellStatus;
+function normalizeReservationStatus(s?: string | null): Reservation['status'] {
+  const up = (s ?? '').toUpperCase();
+  switch (up) {
+    case 'PENDIENTE':
+    case 'ACEPTADO':
+    case 'CANCELADO':
+    case 'ACTIVA':
+    case 'INCUMPLIDA':
+    case 'FINALIZADA':
+      return up;
+    default:
+      return 'PENDIENTE';
+  }
 }
 
-/* ===== API ===== */
+/* API */
 
 /** Grid semanal (tutor, completo) con normalización de estados */
 export async function getScheduleForTutor(
@@ -106,7 +126,9 @@ export async function getScheduleForTutor(
     ACTIVA: 3,
     DISPONIBLE: 2,
     CANCELADO: 1,
-    VENCIDA: 0,     
+    VENCIDA: 0,
+    INCUMPLIDA: 0,
+    FINALIZADA: 0,
   };
   const pr = (s: CellStatus | null | undefined) => (s ? (priority[s] ?? 0) : 0);
   // mapeo intermedio por clave date_hour
@@ -118,15 +140,13 @@ export async function getScheduleForTutor(
     const next: ScheduleCell = { ...c, hour: hhmm, status: normalizeCellStatus(c.status) };
     if (!prev || pr(next.status) >= pr(prev.status)) byKey.set(key, next);
   }
-  //  CANCELADO a libre (null); DISPONIBLE pasado a VENCIDA
+   // de cancelado a null, de disponible vencida a vencida
   const result: ScheduleCell[] = [];
   for (const c of Array.from(byKey.values())) {
-    // CANCELADO a libre (null)
     if (c.status === 'CANCELADO') {
       result.push({ ...c, status: null, reservationId: null, studentId: null });
       continue;
     }
-    // DISPONIBLE pasado a VENCIDA
     if (c.status === 'DISPONIBLE' && isPastSlot(c.date, c.hour)) {
       result.push({ ...c, status: 'VENCIDA' });
       continue;
@@ -155,27 +175,20 @@ export async function createReservation(
 }
 
 /** Mis reservas (estudiante) en rango [from,to] */
-export async function getMyReservations(
-  from: string,
-  to: string,
-  token?: string
-): Promise<Reservation[]> {
+export async function getMyReservations(from: string, to: string, token?: string): Promise<Reservation[]> {
   const url = `${BASE}/api/reservations/my?from=${from}&to=${to}`;
   const res = await fetch(url, { method: 'GET', headers: headers(token) });
   const arr = (await handle(res)) as Reservation[];
   return arr.map(r => ({ ...r, status: normalizeReservationStatus(r.status) }));
 }
 
-/** Reservas para mí (como tutor) en rango */
-export async function getTutorReservations(
-  from: string,
-  to: string,
-  token?: string
-): Promise<Reservation[]> {
+/** Reservas para mí (como tutor) en rango - SIN NORMALIZAR EL STATUS */
+export async function getTutorReservations(from: string, to: string, token?: string): Promise<Reservation[]> {
   const url = `${BASE}/api/reservations/for-me?from=${from}&to=${to}`;
   const res = await fetch(url, { method: 'GET', headers: headers(token) });
   const arr = (await handle(res)) as Reservation[];
-  return arr.map(r => ({ ...r, status: normalizeReservationStatus(r.status) }));
+  // NO normalizar el status aquí - dejarlo como viene del backend
+  return arr;
 }
 
 /** Cancelar reserva */
@@ -190,6 +203,14 @@ export async function cancelReservation(id: string, token?: string): Promise<Res
 /** Aceptar reserva (tutor) */
 export async function acceptReservation(id: string, token?: string): Promise<Reservation> {
   const url = `${BASE}/api/reservations/${id}/accept`;
+  const res = await fetch(url, { method: 'PATCH', headers: headers(token) });
+  const r = (await handle(res)) as Reservation;
+  r.status = normalizeReservationStatus(r.status);
+  return r;
+}
+/** Marcar asistencia */
+export async function setReservationAttended(id: string, value: boolean, token?: string): Promise<Reservation> {
+  const url = `${BASE}/api/reservations/${id}/attended?value=${value ? 'true' : 'false'}`;
   const res = await fetch(url, { method: 'PATCH', headers: headers(token) });
   const r = (await handle(res)) as Reservation;
   r.status = normalizeReservationStatus(r.status);
@@ -240,7 +261,7 @@ export async function clearDayAvailability(date: string, token?: string): Promis
   const res = await fetch(url, {
     method: 'PUT',
     headers: headers(token),
-    body: JSON.stringify({ hours: [] }),   // body requerido aunque sea []
+    body: JSON.stringify({ hours: [] }),   
   });
   await handle(res);
 }

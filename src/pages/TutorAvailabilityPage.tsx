@@ -11,7 +11,6 @@ import {
 } from '../service/Api-scheduler';
 import '../styles/Calendar.css';
 
-// === Utilidades de fecha/hora ===
 function mondayOf(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
@@ -55,9 +54,7 @@ function isSelectable(dateISO: string, hhmm: string): boolean {
   return dt.getTime() >= cutoff.getTime();
 }
 
-// === Tipos ===
 type OperationMode = 'add' | 'delete';
-// === Componente principal ===
 const TutorAvailabilityPage: React.FC = () => {
   const auth = useAuth();
   const token = (auth.user as any)?.id_token ?? auth.user?.access_token;
@@ -101,7 +98,6 @@ const TutorAvailabilityPage: React.FC = () => {
     return m;
   }, [cells]);
 
-  // === ignora pasado y estados no válidos ===
   const toggle = (key: string) => {
     const [date, hhmm] = key.split('_');
     if (!isSelectable(date, hhmm)) {
@@ -177,7 +173,6 @@ const TutorAvailabilityPage: React.FC = () => {
       setMessage('⚠️ La selección no contiene horas válidas para agregar.');
       return;
     }
-    // resumen
     const totalHours = validPairs.reduce((acc, [, hs]) => acc + hs.length, 0);
     const ok = globalThis.confirm(
       `¿Agregar disponibilidad en ${validPairs.length} día(s) con ${totalHours} hora(s) seleccionada(s)?`
@@ -199,7 +194,6 @@ const TutorAvailabilityPage: React.FC = () => {
           errors.push(`${date}: ${e.message || 'Error'}`);
         }
       }
-      // resumen
       if (errorCount === 0) setMessage(`✅ ${successCount} hora(s) de disponibilidad agregadas correctamente.`);
       else if (successCount > 0)
         setMessage(`⚠️ ${successCount} agregadas, ${errorCount} fallaron.\n${errors.join('\n')}`);
@@ -215,7 +209,6 @@ const TutorAvailabilityPage: React.FC = () => {
     }
   };
 
-  // === Confirmar ELIMINAR ===
   const confirmDelete = async () => {
     if (selected.size === 0) {
       setMessage('⚠️ Selecciona una o más horas DISPONIBLES futuras para eliminar.');
@@ -236,7 +229,6 @@ const TutorAvailabilityPage: React.FC = () => {
       setMessage('⚠️ No hay disponibilidad FUTURA para eliminar en la selección.');
       return;
     }
-    // resumen
     const ok = globalThis.confirm(`¿Eliminar ${cellsToDelete.length} hora(s) de disponibilidad?`);
     if (!ok) return;
     // agrupar por día y ejecutar
@@ -268,7 +260,6 @@ const TutorAvailabilityPage: React.FC = () => {
           await clearDayAvailability(date, token);
         }
       }
-      // resumen
       setMessage(`✅ ${cellsToDelete.length} hora(s) eliminada(s) correctamente.`);
       setSelected(new Set());
       await new Promise(r => setTimeout(r, 500));

@@ -9,7 +9,8 @@ import AddRoleButton from '../components/AddRoleButton';
 import ProfileIncompleteNotification from '../components/ProfileIncompleteNotification';
 import TutorAvailabilityPage from './TutorAvailabilityPage';
 import TutorClassesPage from './TutorClassesPage';
-// Definición de tipos
+
+/* Tipos */
 interface User {
   userId: string;
   name: string;
@@ -19,7 +20,6 @@ interface User {
   specializations?: string[];
   credentials?: string[];
 }
-// Definición de tipos para datos simulados
 interface Student {
   id: string;
   name: string;
@@ -29,7 +29,6 @@ interface Student {
   status: 'active' | 'inactive';
   sessionsCompleted: number;
 }
-//  Definición de tipos para solicitudes y sesiones
 interface TutoringRequest {
   id: string;
   studentName: string;
@@ -39,7 +38,6 @@ interface TutoringRequest {
   status: 'pending' | 'accepted' | 'rejected';
   priority: 'low' | 'medium' | 'high';
 }
-// Definición de tipos para sesiones de tutoría
 interface TutoringSession {
   id: string;
   title: string;
@@ -53,132 +51,50 @@ interface TutoringSession {
   enrolledStudents: number;
   status: 'scheduled' | 'completed' | 'cancelled';
 }
-// Componente principal del dashboard del tutor
+export const TutorTopNav: React.FC<{ currentRole?: 'tutor' | 'student' }> = ({ currentRole = 'tutor' }) => {
+  return (
+    <>
+      <DashboardSwitchButton currentRole={currentRole} />
+      <AddRoleButton currentRole={currentRole} />
+    </>
+  );
+};
 const TutorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
   const { userRoles, isAuthenticated } = useAuthFlow();
-  
-  // Hook de verificación de perfil
+
   const { isProfileComplete, missingFields } = useProfileStatus();
   const [showProfileNotification, setShowProfileNotification] = useState(true);
-  
-  //  Estado del componente
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'dashboard' | 'students' | 'requests' | 'availability' | 'sessions' | 'create-session'>('dashboard');
-  // Datos simulados
+
+  /* Datos demo */
   const [students] = useState<Student[]>([
-    {
-      id: '1',
-      name: 'Ana García',
-      email: 'ana@student.com',
-      educationLevel: 'Pregrado',
-      joinDate: '2025-09-01',
-      status: 'active',
-      sessionsCompleted: 8
-    },
-    {
-      id: '2',
-      name: 'Carlos Mendoza',
-      email: 'carlos@student.com',
-      educationLevel: 'Secundaria',
-      joinDate: '2025-08-15',
-      status: 'active',
-      sessionsCompleted: 12
-    },
-    {
-      id: '3',
-      name: 'Lucía Torres',
-      email: 'lucia@student.com',
-      educationLevel: 'Pregrado',
-      joinDate: '2025-09-10',
-      status: 'inactive',
-      sessionsCompleted: 3
-    }
+    { id: '1', name: 'Ana García',    email: 'ana@student.com',    educationLevel: 'Pregrado',  joinDate: '2025-09-01', status: 'active',   sessionsCompleted: 8 },
+    { id: '2', name: 'Carlos Mendoza',email: 'carlos@student.com', educationLevel: 'Secundaria',joinDate: '2025-08-15', status: 'active',   sessionsCompleted: 12 },
+    { id: '3', name: 'Lucía Torres',  email: 'lucia@student.com',  educationLevel: 'Pregrado',  joinDate: '2025-09-10', status: 'inactive', sessionsCompleted: 3 }
   ]);
-  // Estado para solicitudes y sesiones
   const [requests, setRequests] = useState<TutoringRequest[]>([
-    {
-      id: '1',
-      studentName: 'María López',
-      subject: 'Matemáticas',
-      description: 'Necesito ayuda con cálculo integral',
-      requestDate: '2025-09-25',
-      status: 'pending',
-      priority: 'high'
-    },
-    {
-      id: '2',
-      studentName: 'Pedro Ruiz',
-      subject: 'Programación',
-      description: 'Ayuda con React y TypeScript',
-      requestDate: '2025-09-24',
-      status: 'pending',
-      priority: 'medium'
-    },
-    {
-      id: '3',
-      studentName: 'Sofia Cruz',
-      subject: 'Física',
-      description: 'Problemas de cinemática',
-      requestDate: '2025-09-23',
-      status: 'accepted',
-      priority: 'low'
-    }
+    { id: '1', studentName: 'María López', subject: 'Matemáticas',   description: 'Necesito ayuda con cálculo integral', requestDate: '2025-09-25', status: 'pending',  priority: 'high'   },
+    { id: '2', studentName: 'Pedro Ruiz',  subject: 'Programación',  description: 'Ayuda con React y TypeScript',        requestDate: '2025-09-24', status: 'pending',  priority: 'medium' },
+    { id: '3', studentName: 'Sofia Cruz',  subject: 'Física',        description: 'Problemas de cinemática',             requestDate: '2025-09-23', status: 'accepted', priority: 'low'    },
   ]);
-  // Estado para sesiones de tutoría
   const [sessions, setSessions] = useState<TutoringSession[]>([
-    {
-      id: '1',
-      title: 'Introducción al Cálculo',
-      description: 'Conceptos básicos de límites y derivadas',
-      subject: 'Matemáticas',
-      date: '2025-09-28',
-      time: '14:00',
-      duration: 60,
-      price: 25000,
-      maxStudents: 5,
-      enrolledStudents: 3,
-      status: 'scheduled'
-    },
-    {
-      id: '2',
-      title: 'React Avanzado',
-      description: 'Hooks personalizados y optimización',
-      subject: 'Programación',
-      date: '2025-09-30',
-      time: '16:00',
-      duration: 90,
-      price: 35000,
-      maxStudents: 8,
-      enrolledStudents: 6,
-      status: 'scheduled'
-    }
+    { id: '1', title: 'Introducción al Cálculo', description: 'Conceptos básicos de límites y derivadas', subject: 'Matemáticas',   date: '2025-09-28', time: '14:00', duration: 60, price: 25000, maxStudents: 5, enrolledStudents: 3, status: 'scheduled' },
+    { id: '2', title: 'React Avanzado',          description: 'Hooks personalizados y optimización',       subject: 'Programación',  date: '2025-09-30', time: '16:00', duration: 90, price: 35000, maxStudents: 8, enrolledStudents: 6, status: 'scheduled' },
   ]);
-  // Estado para nueva sesión de tutoría
   const [newSession, setNewSession] = useState({
-    title: '',
-    description: '',
-    subject: '',
-    date: '',
-    time: '',
-    duration: 60,
-    price: 25000,
-    maxStudents: 5
+    title: '', description: '', subject: '', date: '', time: '', duration: 60, price: 25000, maxStudents: 5
   });
-  // Efecto para verificar autenticación y cargar datos del usuario
+
+  /* Auth guard + datos usuario */
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
-    // Asegurarse de que el usuario tenga rol de tutor
-    if (!userRoles || !userRoles.includes('tutor')) {
-      navigate('/');
-      return;
-    }
-    // Cargar datos del usuario actual
+    if (!isAuthenticated) { navigate('/login'); return; }
+    if (!userRoles || !userRoles.includes('tutor')) { navigate('/'); return; }
+
     if (auth.user) {
       setCurrentUser({
         userId: auth.user.profile?.sub || 'unknown',
@@ -191,40 +107,31 @@ const TutorDashboard: React.FC = () => {
       });
     }
   }, [isAuthenticated, userRoles, navigate, auth.user]);
-  // Manejadores de eventos
+
+  /* Logout (mantener base: una sola acción que hace local + redirección Cognito) */
   const handleLogout = async () => {
-    // Cerrar sesión local primero
     auth.removeUser();
-    
-    // Luego redirigir a Cognito para cerrar sesión
     const clientId = "lmk8qk12er8t8ql9phit3u12e";
     const logoutUri = "http://localhost:3000";
     const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
     globalThis.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
-  // Manejador para editar perfil
   const handleEditProfile = () => {
     navigate('/edit-profile', { state: { currentRole: 'tutor' } });
   };
-  // Manejadores para solicitudes de tutoría
+
   const handleAcceptRequest = (requestId: string) => {
     setRequests(prev => prev.map(req =>
-      req.id === requestId
-        ? { ...req, status: 'accepted' as const }
-        : req
+      req.id === requestId ? { ...req, status: 'accepted' } : req
     ));
     alert('Solicitud aceptada. El estudiante será notificado.');
   };
-  // Manejador para rechazar solicitud
   const handleRejectRequest = (requestId: string) => {
     setRequests(prev => prev.map(req =>
-      req.id === requestId
-        ? { ...req, status: 'rejected' as const }
-        : req
+      req.id === requestId ? { ...req, status: 'rejected' } : req
     ));
     alert('Solicitud rechazada.');
   };
-  // Manejador para crear nueva sesión de tutoría
   const handleCreateSession = () => {
     if (newSession.title && newSession.subject && newSession.date && newSession.time) {
       const session: TutoringSession = {
@@ -234,20 +141,11 @@ const TutorDashboard: React.FC = () => {
         status: 'scheduled'
       };
       setSessions([...sessions, session]);
-      setNewSession({
-        title: '',
-        description: '',
-        subject: '',
-        date: '',
-        time: '',
-        duration: 60,
-        price: 25000,
-        maxStudents: 5
-      });
+      setNewSession({ title: '', description: '', subject: '', date: '', time: '', duration: 60, price: 25000, maxStudents: 5 });
       alert('Sesión de tutoría creada exitosamente!');
     }
   };
-  // Funciones para obtener colores según prioridad y estado
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high': return '#ef4444';
@@ -256,7 +154,6 @@ const TutorDashboard: React.FC = () => {
       default: return '#6b7280';
     }
   };
-  // Función para obtener colores según estado
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'accepted': return '#10b981';
@@ -270,33 +167,12 @@ const TutorDashboard: React.FC = () => {
       default: return '#6b7280';
     }
   };
-  // Renderizado del componente
+
   if (auth.isLoading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontSize: '18px'
-      }}>
-        ⏳ Verificando acceso de tutor...
-      </div>
-    );
+    return <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',fontSize:18}}>⏳ Verificando acceso de tutor...</div>;
   }
-  // Mostrar cargando si no hay usuario
   if (!currentUser) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontSize: '18px'
-      }}>
-        🔍 Cargando información del tutor...
-      </div>
-    );
+    return <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',fontSize:18}}>🔍 Cargando información del tutor...</div>;
   }
 
   return (
@@ -309,7 +185,7 @@ const TutorDashboard: React.FC = () => {
           onDismiss={() => setShowProfileNotification(false)}
         />
       )}
-      
+
       {/* Header */}
       <header className="dashboard-header">
         <div className="header-content">
@@ -318,50 +194,17 @@ const TutorDashboard: React.FC = () => {
           </div>
 
           <nav className="main-nav">
-            <button
-              className={`nav-item ${activeSection === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveSection('dashboard')}
-            >
-              <span>📊</span> Dashboard
-            </button>
-            <button
-              className={`nav-item ${activeSection === 'students' ? 'active' : ''}`}
-              onClick={() => setActiveSection('students')}
-            >
-              <span>👥</span> Mis Estudiantes
-            </button>
-            <button
-              className={`nav-item ${activeSection === 'requests' ? 'active' : ''}`}
-              onClick={() => setActiveSection('requests')}
-            >
-              <span>📬</span> Solicitudes
-            </button>
-            <button
-              className={`nav-item ${activeSection === 'availability' ? 'active' : ''}`}
-              onClick={() => setActiveSection('availability')}
-            >
-              <span>🗓️</span> Disponibilidad
-            </button>
-            <button
-              className={`nav-item ${activeSection === 'sessions' ? 'active' : ''}`}
-              onClick={() => setActiveSection('sessions')}
-            >
-              <span>🎓</span> Mis Clases
-            </button>
-            <button
-              className={`nav-item ${activeSection === 'create-session' ? 'active' : ''}`}
-              onClick={() => setActiveSection('create-session')}
-            >
-              <span>➕</span> Nueva Clase
-            </button>
+            <button className={`nav-item ${activeSection === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveSection('dashboard')}><span>📊</span> Dashboard</button>
+            <button className={`nav-item ${activeSection === 'students' ? 'active' : ''}`} onClick={() => setActiveSection('students')}><span>👥</span> Mis Estudiantes</button>
+            <button className={`nav-item ${activeSection === 'requests' ? 'active' : ''}`} onClick={() => setActiveSection('requests')}><span>📬</span> Solicitudes</button>
+            <button className={`nav-item ${activeSection === 'availability' ? 'active' : ''}`} onClick={() => setActiveSection('availability')}><span>🗓️</span> Disponibilidad</button>
+            <button className={`nav-item ${activeSection === 'sessions' ? 'active' : ''}`} onClick={() => setActiveSection('sessions')}><span>🎓</span> Mis Clases</button>
+            <button className={`nav-item ${activeSection === 'create-session' ? 'active' : ''}`} onClick={() => setActiveSection('create-session')}><span>➕</span> Nueva Clase</button>
           </nav>
 
           <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div className="user-menu-container">
-              <button
-                className="user-avatar"
-                onClick={() => setShowUserMenu(!showUserMenu)}
-              >
+              <button className="user-avatar" onClick={() => setShowUserMenu(!showUserMenu)}>
                 <span className="avatar-icon">👨‍🏫</span>
                 <span className="user-name">{currentUser.name}</span>
                 <span className="dropdown-arrow">▼</span>
@@ -380,14 +223,10 @@ const TutorDashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="dropdown-divider"></div>
-                  <button className="dropdown-item" onClick={handleEditProfile}>
-                    <span>✏️</span> Editar Perfil
-                  </button>
+                  <button className="dropdown-item" onClick={handleEditProfile}><span>✏️</span> Editar Perfil</button>
                   <AddRoleButton currentRole="tutor" asMenuItem={true} />
                   <DashboardSwitchButton currentRole="tutor" asMenuItem={true} />
-                  <button className="dropdown-item logout" onClick={handleLogout}>
-                    <span>🚪</span> Cerrar Sesión
-                  </button>
+                  <button className="dropdown-item logout" onClick={handleLogout}><span>🚪</span> Cerrar Sesión</button>
                 </div>
               )}
             </div>
@@ -395,9 +234,8 @@ const TutorDashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main */}
       <main className="dashboard-main">
-        {/* Dashboard Overview */}
         {activeSection === 'dashboard' && (
           <div className="dashboard-content">
             <h1>¡Bienvenido, {currentUser.name}! 👨‍🏫</h1>
@@ -430,7 +268,7 @@ const TutorDashboard: React.FC = () => {
               <div className="stat-card">
                 <div className="stat-icon">💰</div>
                 <div className="stat-info">
-                  <h3>${sessions.reduce((acc, s) => acc + (s.price * s.enrolledStudents), 0).toLocaleString()}</h3>
+                  <h3>{sessions.reduce((acc, s) => acc + (s.price * s.enrolledStudents), 0).toLocaleString()}</h3>
                   <p>Ingresos Estimados</p>
                 </div>
               </div>
@@ -465,7 +303,6 @@ const TutorDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Students Section */}
         {activeSection === 'students' && (
           <div className="students-section">
             <h1>Mis Estudiantes 👥</h1>
@@ -478,10 +315,7 @@ const TutorDashboard: React.FC = () => {
                     <div className="student-info">
                       <h3>{student.name}</h3>
                       <p className="student-email">{student.email}</p>
-                      <span
-                        className="status-badge"
-                        style={{ color: getStatusColor(student.status) }}
-                      >
+                      <span className="status-badge" style={{ color: getStatusColor(student.status) }}>
                         {student.status === 'active' ? 'Activo' : 'Inactivo'}
                       </span>
                     </div>
@@ -503,72 +337,50 @@ const TutorDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Requests Section */}
         {activeSection === 'requests' && (
           <div className="requests-section">
             <h1>Solicitudes de Tutoría 📬</h1>
 
             <div className="requests-grid">
-              {requests.map(request => (
-                <div key={request.id} className="request-card">
-                  <div className="request-header">
-                    <h3>{request.studentName}</h3>
-                    <div className="request-meta">
-                      <span
-                        className="priority-badge"
-                        style={{ backgroundColor: getPriorityColor(request.priority) }}
-                      >
-                        {request.priority.toUpperCase()}
-                      </span>
-                      <span
-                        className="status-badge"
-                        style={{ color: getStatusColor(request.status) }}
-                      >
-                        {request.status === 'pending' ? 'PENDIENTE' :
-                          request.status === 'accepted' ? 'ACEPTADA' : 'RECHAZADA'}
-                      </span>
-                    </div>
-                  </div>
+              {requests.map(request => {
+                let statusLabel = 'RECHAZADA';
+                if (request.status === 'pending') statusLabel = 'PENDIENTE';
+                else if (request.status === 'accepted') statusLabel = 'ACEPTADA';
 
-                  <div className="request-content">
-                    <p><strong>Materia:</strong> {request.subject}</p>
-                    <p><strong>Descripción:</strong> {request.description}</p>
-                    <p><strong>Fecha:</strong> {request.requestDate}</p>
-                  </div>
-
-                  {request.status === 'pending' && (
-                    <div className="request-actions">
-                      <button
-                        className="btn-primary"
-                        onClick={() => handleAcceptRequest(request.id)}
-                      >
-                        Aceptar
-                      </button>
-                      <button
-                        className="btn-danger"
-                        onClick={() => handleRejectRequest(request.id)}
-                      >
-                        Rechazar
-                      </button>
+                return (
+                  <div key={request.id} className="request-card">
+                    <div className="request-header">
+                      <h3>{request.studentName}</h3>
+                      <div className="request-meta">
+                          {React.createElement('span', { className: 'priority-badge', style: { backgroundColor: getPriorityColor(request.priority) } }, request.priority.toUpperCase())}
+                          {React.createElement('span', { className: 'status-badge', style: { color: getStatusColor(request.status) } }, statusLabel)}
+                        </div>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    <div className="request-content">
+                      <p><strong>Materia:</strong> {request.subject}</p>
+                      <p><strong>Descripción:</strong> {request.description}</p>
+                      <p><strong>Fecha:</strong> {request.requestDate}</p>
+                    </div>
+
+                    {request.status === 'pending' && (
+                      <div className="request-actions">
+                        <button className="btn-primary" onClick={() => handleAcceptRequest(request.id)}>Aceptar</button>
+                        <button className="btn-danger" onClick={() => handleRejectRequest(request.id)}>Rechazar</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Availability Section */}
-        {activeSection === 'availability' && (
-          <TutorAvailabilityPage />
-        )}
+        {activeSection === 'availability' && <TutorAvailabilityPage />}
 
-        {/* Sessions Section - AHORA USA EL COMPONENTE REAL */}
-        {activeSection === 'sessions' && (
-          <TutorClassesPage />
-        )}
+        {/* Sessions Section - componente real */}
+        {activeSection === 'sessions' && <TutorClassesPage />}
 
-        {/* Create Session Section */}
         {activeSection === 'create-session' && (
           <div className="create-session-section">
             <h1>Crear Nueva Clase ➕</h1>
@@ -689,18 +501,10 @@ const TutorDashboard: React.FC = () => {
                 </div>
 
                 <div className="form-actions">
-                  <button
-                    className="btn-primary btn-large"
-                    onClick={handleCreateSession}
-                  >
-                    Crear Clase
-                  </button>
+                  <button className="btn-primary btn-large" onClick={handleCreateSession}>Crear Clase</button>
                   <button
                     className="btn-secondary"
-                    onClick={() => setNewSession({
-                      title: '', description: '', subject: '', date: '', time: '',
-                      duration: 60, price: 25000, maxStudents: 5
-                    })}
+                    onClick={() => setNewSession({ title: '', description: '', subject: '', date: '', time: '', duration: 60, price: 25000, maxStudents: 5 })}
                   >
                     Limpiar
                   </button>
