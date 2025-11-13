@@ -75,16 +75,17 @@
   position: relative;
   font-size: 10px;
   font-weight: 600;
-  color: white;
+  color: #111827;
   text-transform: uppercase;
   letter-spacing: 0.2px;
 }
 
 /* Estados base */
 .cell.available {
-  background: #10B981;
+  background: #059669;
   border-color: #059669;
   box-shadow: inset 0 0 0 1px rgba(5, 150, 105, 0.4);
+  color: #000000;
 }
 
 /* Naranja para PENDIENTE (y legacy ACTIVA) */
@@ -92,37 +93,40 @@
   background: #F59E0B;
   border-color: #D97706;
   box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.4);
+  color: #000000;
 }
 
-/* Mantener .active por si algo lo usa aún (apunta al mismo estilo que pending) */
+/* Mantener .active por si algo lo usa aún  */
 .cell.active {
   background: #F59E0B;
   border-color: #D97706;
   box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.4);
+  color: #000000;
 }
 
 .cell.accepted {
   background: #3B82F6;
   border-color: #2563EB;
+  color: #000000;
 }
 
 .cell.canceled {
   background: #EF4444;
   border-color: #DC2626;
+  color: #111827;
 }
 
 /* Rosa para VENCIDA */
 .cell.expired {
   background: #EC4899;
-  /* pink-500 */
   border-color: #DB2777;
-  /* pink-600 */
   box-shadow: inset 0 0 0 1px rgba(219, 39, 119, 0.35);
+  color: #111827;
 }
 
 .cell.disabled {
   background: #F3F4F6;
-  color: #9CA3AF;
+  color: var(--u-muted);
   border-color: #E5E7EB;
 }
 
@@ -204,7 +208,7 @@
   background: #F3F4F6;
 }
 
-/* Navegación de semana con gradiente morado */
+/* Navegación de semana con gradiente azul/morado como el menú */
 .week-nav {
   display: flex;
   align-items: center;
@@ -212,9 +216,22 @@
   gap: 12px;
   padding: 12px 16px !important;
   border-radius: 12px;
-  background: linear-gradient(135deg, #7C3AED 0%, #6366F1 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  /* Gradiente azul a morado como el menú de navegación */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+/* Botones ghost dentro de la barra de navegación */
+.week-nav .btn-ghost {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.week-nav .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .week-nav__title {
@@ -222,6 +239,7 @@
   letter-spacing: .2px;
   text-align: center;
   flex: 1;
+  color: #ffffff;
 }
 
 /* Botones estilo moderno */
@@ -272,7 +290,7 @@
 
 .btn-modern:disabled {
   background: #D1D5DB;
-  color: #9CA3AF;
+  color: #374151;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -282,7 +300,7 @@
 .btn-ghost {
   background: rgba(255, 255, 255, .15);
   border: 1px solid rgba(255, 255, 255, .3);
-  color: white;
+  color: #ffffff;
   padding: 8px 16px;
   border-radius: 8px;
   font-weight: 600;
@@ -294,7 +312,7 @@
 
 .btn-ghost:hover {
   background: rgba(255, 255, 255, .25);
-  border-color: rgba(255, 255, 255, .5);
+  border-color: rgba(255, 255, 255, .4);
   transform: translateY(-1px);
 }
 
@@ -303,7 +321,7 @@
 }
 
 .btn-ghost:focus-visible {
-  outline: 2px solid white;
+  outline: 2px solid #ffffff;
   outline-offset: 2px;
 }
 
@@ -314,7 +332,7 @@
   padding: 18px;
   border-radius: 16px;
   background: linear-gradient(135deg, #e86ad7 0%, #e86ad7 100%);
-  color: #fff;
+  color: #0f172a;
   box-shadow: 0 10px 24px rgba(124, 58, 237, .18);
   border: 0;
 }
@@ -397,7 +415,7 @@
 .empty-note {
   background: rgba(255, 255, 255, .25);
   border: 1px dashed rgba(255, 255, 255, .5);
-  color: #fff;
+  color: #111827;
   padding: 14px;
   border-radius: 12px;
   text-align: center;
