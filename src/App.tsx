@@ -14,7 +14,6 @@ import TutorAvailabilityPage from './pages/TutorAvailabilityPage';
 import TutorClassesPage from './pages/TutorClassesPage';
 import ProfileViewPage from './pages/ProfileViewPage';
 import BookTutorPage from './pages/BookTutorPage';
-import ChatPage from './pages/ChatPage';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ 
@@ -288,7 +287,6 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } 
           />
-          <Route path="/messages" element={<ChatPage />} />
 
         </Routes>
       </div>

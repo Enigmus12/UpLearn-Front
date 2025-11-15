@@ -377,11 +377,197 @@
 .reservation-attended { margin-left: 8px; }
 
 .reservation-meta { display: flex; justify-content: center; }
-.reservation-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 .status-badge { color: inherit; font-weight: 700; font-size: 12px; padding: 4px 12px; border-radius: 999px; }
 
 @media (max-width: 768px) {
   .reservation-row { grid-template-columns: 1fr; }
   .reservation-actions { justify-content: flex-start; }
+}
+
+/* --- ESTILOS PARA EL NUEVO HISTORIAL DE ESTUDIANTES --- */
+
+.student-card-container {
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+.student-history-panel {
+  background-color: #f9fafb;
+  border-radius: 0 0 12px 12px;
+  margin-top: -10px; /* Solapa ligeramente con la tarjeta de arriba */
+  padding: 1.25rem;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  animation: fadeIn 0.4s ease-out;
+}
+
+.student-history-panel h4 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #1f2937;
+  font-size: 1.1rem;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background-color: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+}
+
+.history-date {
+  color: #374151;
+  font-weight: 500;
+}
+
+.history-status-badge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.pagination-controls button {
+  background-color: #e5e7eb;
+  color: #374151;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.pagination-controls button:hover:not(:disabled) {
+  background-color: #d1d5db;
+}
+
+.pagination-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-controls span {
+  color: #4b5563;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+/* --- Estilos Adicionales para la Tarjeta de Estudiante --- */
+
+.status-badge-student {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.status-badge-student.active {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.status-badge-student.inactive {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}/* --- ESTILOS PARA LOS BOTONES DE ACCIÓN DE RESERVA --- */
+
+.reservation-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* Clase base para darles el mismo tamaño y estilo */
+.btn-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 120px; /* Ancho fijo para consistencia */
+  padding: 0.75rem 0; /* Padding vertical */
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white;
+}
+
+/* Estilo para el botón Aceptar */
+.btn-action.btn-accept {
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+.btn-action.btn-accept:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+}
+
+/* Estilo para el botón Cancelar */
+.btn-action.btn-cancel {
+  background-color: #dc2626; /* Rojo */
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+}
+
+.btn-action.btn-cancel:hover:not(:disabled) {
+  background-color: #b91c1c;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.3);
+}
+
+/* Estilo para el botón Contactar */
+.btn-action.btn-contact {
+  background-color: #16a34a; /* Verde */
+  box-shadow: 0 6px 12px rgba(22, 163, 74, 0.2);
+}
+
+.btn-action.btn-contact:hover:not(:disabled) {
+  background-color: #15803d;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.3);
+}
+
+/* Estilo para botones deshabilitados */
+.btn-action:disabled {
+  background-color: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
 }
