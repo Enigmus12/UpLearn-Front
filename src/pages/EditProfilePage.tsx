@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import ApiUserService from '../service/Api-user';
@@ -74,7 +74,33 @@ const EditProfilePage: React.FC = () => {
 
   // Estados para inputs dinámicos
   const [specializationInput, setSpecializationInput] = useState('');
-  const [credentialInput, setCredentialInput] = useState('');
+  // Estados para subida de credenciales como archivos
+  const [credentialFiles, setCredentialFiles] = useState<File[]>([]);
+  const [isUploadingCredentials, setIsUploadingCredentials] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [credentialNames, setCredentialNames] = useState<string[]>([]);
+  const [isDeletingCredentialIndex, setIsDeletingCredentialIndex] = useState<number | null>(null);
+
+  const deriveNameFromUrl = (url: string): string => {
+    try {
+      const u = new URL(url);
+      const last = u.pathname.split('/').filter(Boolean).pop();
+      if (!last) return 'Archivo';
+      const decoded = decodeURIComponent(last);
+      // Limpiar UUIDs y caracteres del servidor, quedarnos solo con el nombre real
+      // Ejemplo: "588aed7a-8b45-44d8-ab8d-f7c2eb2e05f5_Taller_Access_Control.pdf" -> "Taller_Access_Control.pdf"
+      const cleaned = decoded.replace(/^[a-f0-9\-]+_/i, '');
+      return cleaned || decoded;
+    } catch {
+      const parts = url.split('?')[0].split('#')[0].split('/');
+      const last = parts.filter(Boolean).pop();
+      if (!last) return 'Archivo';
+      const decoded = decodeURIComponent(last);
+      const cleaned = decoded.replace(/^[a-f0-9\-]+_/i, '');
+      return cleaned || decoded;
+    }
+  };
 
   useEffect(() => {
     const loadUserProfile = async () => {
@@ -141,6 +167,7 @@ const EditProfilePage: React.FC = () => {
           specializations: editableData.specializations || [],
           credentials: editableData.credentials || []
         });
+        setCredentialNames((editableData.credentials || []).map((u: string) => deriveNameFromUrl(u)));
         
       } catch (error) {
         console.error('Error cargando perfil:', error);
@@ -187,21 +214,108 @@ const EditProfilePage: React.FC = () => {
     }));
   };
 
-  const addCredential = () => {
-    if (credentialInput.trim() && !formData.credentials.includes(credentialInput.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        credentials: [...prev.credentials, credentialInput.trim()]
-      }));
-      setCredentialInput('');
+  // Remover credencial (URL) ya subida en backend y UI
+  const removeUploadedCredential = async (index: number) => {
+    setUploadError('');
+    if (!auth.user?.id_token) {
+      setUploadError('No hay token de autenticación válido');
+      return;
+    }
+    const url = formData.credentials[index];
+    if (!url) return;
+    try {
+      setIsDeletingCredentialIndex(index);
+      const result: any = await ApiUserService.deleteTutorCredentials(auth.user.id_token, [url]);
+
+      // Intentar tomar la lista de credenciales restantes desde la respuesta si existe
+      const remainingFromBackend =
+        result?.remainingCredentials ||
+        result?.credentials ||
+        result?.remaining ||
+        result?.urls || null;
+
+      if (Array.isArray(remainingFromBackend)) {
+        setFormData(prev => ({ ...prev, credentials: remainingFromBackend }));
+        // recalcular nombres con las URLs restantes
+        setCredentialNames(remainingFromBackend.map((u: string) => deriveNameFromUrl(u)));
+      } else {
+        // fallback: filtrar localmente
+        setFormData(prev => ({
+          ...prev,
+          credentials: prev.credentials.filter((_, i) => i !== index)
+        }));
+        setCredentialNames(prev => prev.filter((_, i) => i !== index));
+      }
+
+      // Mensaje informativo si backend indica verificación
+      if (typeof result?.userVerified === 'boolean' && !result.userVerified) {
+        setUploadError('Se eliminaron las credenciales. Tu cuenta quedó no verificada.');
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Error eliminando credencial');
+    } finally {
+      setIsDeletingCredentialIndex(null);
     }
   };
 
-  const removeCredential = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      credentials: prev.credentials.filter((_, i) => i !== index)
-    }));
+  const handleCredentialFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError('');
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+    // Acumular archivos evitando duplicados por nombre+size+lastModified
+    setCredentialFiles(prev => {
+      const existingKeys = new Set(prev.map(f => `${f.name}-${f.size}-${f.lastModified}`));
+      const toAdd = files.filter(f => !existingKeys.has(`${f.name}-${f.size}-${f.lastModified}`));
+      return [...prev, ...toAdd];
+    });
+    // Limpiar el input para permitir volver a elegir los mismos archivos
+    if (e.target) {
+      try { (e.target as HTMLInputElement).value = ''; } catch {}
+    }
+  };
+
+  const handleUploadCredentials = async () => {
+    if (!auth.user?.id_token) {
+      setUploadError('No hay token de autenticación válido');
+      return;
+    }
+    if (credentialFiles.length === 0) {
+      setUploadError('Seleccione uno o más archivos');
+      return;
+    }
+    setIsUploadingCredentials(true);
+    setUploadError('');
+    try {
+      const result: any = await ApiUserService.uploadTutorCredentials(auth.user.id_token, credentialFiles);
+      // result: { totalFiles, uploaded, validated, rejected, savedCredentials: [url...], details: [...] }
+      const savedUrls = result.savedCredentials || [];
+      
+      setFormData(prev => ({
+        ...prev,
+        credentials: [...(prev.credentials || []), ...savedUrls]
+      }));
+      
+      // Mapear nombres de archivos aceptados
+      const acceptedDetails = (result.details || []).filter((d: any) => d.saved);
+      const mappedNames = acceptedDetails.map((d: any) => d.fileName || deriveNameFromUrl(d.uploadedUrl));
+      setCredentialNames(prev => ([...prev, ...mappedNames]));
+      
+      setCredentialFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      
+      // Mostrar mensaje si hubo archivos rechazados
+      if (result.rejected && result.rejected > 0) {
+        const rejectedFiles = (result.details || [])
+          .filter((d: any) => d.status === 'rejected')
+          .map((d: any) => `${d.fileName}: ${d.reason}`)
+          .join(', ');
+        setUploadError(`${result.validated} archivo(s) validado(s), ${result.rejected} rechazado(s): ${rejectedFiles}`);
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Error subiendo credenciales');
+    } finally {
+      setIsUploadingCredentials(false);
+    }
   };
 
   const validateForm = () => {
@@ -232,9 +346,7 @@ const EditProfilePage: React.FC = () => {
       if (formData.specializations.length === 0) {
         newErrors.specializations = 'Debe tener al menos una especialización';
       }
-      if (formData.credentials.length === 0) {
-        newErrors.credentials = 'Debe tener al menos una credencial';
-      }
+      // Las credenciales ya no son obligatorias
     }
 
     setErrors(newErrors);
@@ -601,42 +713,66 @@ const EditProfilePage: React.FC = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Credenciales</label>
-                <div className="array-input-container">
-                  <div className="array-input-row">
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Ej: Licenciatura en Matemáticas, Maestría en..."
-                      value={credentialInput}
-                      onChange={(e) => setCredentialInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCredential())}
-                      disabled={isSaving}
-                    />
-                    <button 
-                      type="button" 
-                      className="add-button" 
-                      onClick={addCredential}
-                      disabled={isSaving}
-                    >
-                      Agregar
-                    </button>
-                  </div>
-                  <div className="tags-container">
-                    {formData.credentials.map((cred, index) => (
-                      <span key={index} className="tag">
-                        {cred}
-                        <button 
-                          type="button" 
-                          onClick={() => removeCredential(index)}
-                          disabled={isSaving}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
+                <label className="form-label">Credenciales (Archivos)</label>
+                <div className="upload-credentials-container">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                    ref={fileInputRef}
+                    onChange={handleCredentialFilesChange}
+                    disabled={isSaving || isUploadingCredentials}
+                  />
+                  {credentialFiles.length > 0 && (
+                    <div className="pending-files">
+                      <p><strong>Archivos seleccionados:</strong></p>
+                      <ul>
+                        {credentialFiles.map((f, i) => (
+                          <li key={`${f.name}-${f.size}-${f.lastModified}`}>
+                            {f.name}
+                            <button
+                              type="button"
+                              className="remove-credential-btn"
+                              onClick={() => setCredentialFiles(prev => prev.filter((_, idx) => idx !== i))}
+                              disabled={isUploadingCredentials}
+                            >
+                              ×
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        className="add-button"
+                        onClick={handleUploadCredentials}
+                        disabled={isUploadingCredentials}
+                      >
+                        {isUploadingCredentials ? 'Subiendo...' : 'Subir Credenciales'}
+                      </button>
+                    </div>
+                  )}
+                  {uploadError && <span className="error-message">{uploadError}</span>}
+                  <div className="uploaded-credentials">
+                    <p><strong>Credenciales Subidas:</strong></p>
+                    {formData.credentials.length === 0 && <p className="muted">No hay credenciales aún.</p>}
+                    <ul className="credentials-list">
+                      {formData.credentials.map((url, index) => (
+                        <li key={index}>
+                          <a href={url} target="_blank" rel="noopener noreferrer">{credentialNames[index] || deriveNameFromUrl(url) || `Credencial ${index + 1}`}</a>
+                          <button
+                            type="button"
+                            className="remove-credential-btn"
+                            onClick={() => removeUploadedCredential(index)}
+                            disabled={isSaving || isDeletingCredentialIndex === index}
+                          >
+                            {isDeletingCredentialIndex === index ? '…' : '×'}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                   {errors.credentials && <span className="error-message">{errors.credentials}</span>}
+                  <p className="help-text">Sube diplomas, certificados o títulos en PDF o imagen.</p>
                 </div>
               </div>
             </div>

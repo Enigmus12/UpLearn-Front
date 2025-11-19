@@ -572,6 +572,84 @@ class ApiUserService {
     }
   }
 
+  /**
+   * Sube archivos de credenciales para el tutor autenticado.
+   * El backend automáticamente: sube a Azure, valida con n8n, y guarda en BD solo documentos académicos válidos.
+   * @param {string} cognitoToken - Token de Cognito
+   * @param {File[]} files - Array de archivos seleccionados
+   * @returns {Promise<{totalFiles: number, uploaded: number, validated: number, rejected: number, savedCredentials: string[], details: Array}>}
+   */
+  static async uploadTutorCredentials(cognitoToken, files) {
+    if (!cognitoToken) {
+      throw new Error('No hay token de autenticación');
+    }
+    if (!files || files.length === 0) {
+      throw new Error('Debe seleccionar al menos un archivo');
+    }
+
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/tutor/credentials`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cognitoToken}`,
+          // NOTA: No establecer Content-Type manualmente para multipart
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error subiendo credenciales:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Error en uploadTutorCredentials:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Elimina URLs de credenciales del tutor autenticado.
+   * @param {string} cognitoToken - Token de Cognito
+   * @param {string[]} urls - Arreglo de URLs a eliminar
+   * @returns {Promise<any>} Respuesta del backend con estado y credenciales restantes
+   */
+  static async deleteTutorCredentials(cognitoToken, urls) {
+    if (!cognitoToken) {
+      throw new Error('No hay token de autenticación');
+    }
+    if (!urls || urls.length === 0) {
+      throw new Error('Debe proporcionar al menos una URL para eliminar');
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/tutor/credentials`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cognitoToken}`,
+        },
+        body: JSON.stringify({ urls })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error eliminando credenciales:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Error en deleteTutorCredentials:', error);
+      throw error;
+    }
+  }
+
 
 }
 
