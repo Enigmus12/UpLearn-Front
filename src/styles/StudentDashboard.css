@@ -1095,3 +1095,90 @@
     text-align: center;
   }
 }
+/* ===== Paleta de la app ===== */
+:root{
+  /* Ajusta este valor para igualar EXACTAMENTE el color del menú */
+  --app-primary: #0ea5e9;       /* fallback si no hay color de menú */
+  --app-primary-hover: #0284c7;
+
+  --app-success: #10b981;       /* verde */
+  --app-success-hover: #059669;
+
+  --app-danger: #ef4444;        /* rojo */
+  --app-danger-hover: #dc2626;
+
+  --app-muted: #6b7280;
+}
+
+/* ===== Botones base ===== */
+.btn-danger,
+.btn-success,
+.btn-action{
+  color: #fff !important;                  /* texto blanco */
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  transition: transform .05s ease, filter .15s ease, background-color .15s ease, border-color .15s ease;
+}
+.btn-danger:hover,
+.btn-success:hover,
+.btn-action:hover{
+  filter: brightness(1.02);
+  transform: translateY(-1px);
+}
+
+
+.btn-success,
+.btn-action.btn-contact{
+  background: var(--app-success);
+}
+.btn-success:hover,
+.btn-action.btn-contact:hover{
+  background: var(--app-success-hover);
+}
+
+.btn-danger,
+.btn-action.btn-cancel{
+  background: var(--app-danger);
+}
+.btn-danger:hover,
+.btn-action.btn-cancel:hover{
+  background: var(--app-danger-hover);
+}
+
+/* Botón "fantasma" para barras de navegación/semana */
+.btn-ghost{
+  color: #fff !important;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.25);
+}
+.btn-ghost:hover{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.35);
+}
+
+/* ===== Separación entre botones de cada reserva ===== */
+.reservation-card__actions{
+  display: flex;
+  gap: 12px;                      /* <<< separación */
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Asegurar contraste si alguna hoja anterior ponía rosa */
+.reservation-card .btn,
+.reservation-card .btn-action{
+  color: #fff !important;
+}
+
+/* Si tenías botones “rosa” heredados, los neutralizamos */
+button[style*="pink"],
+.btn-pink{
+  background: var(--app-primary) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
