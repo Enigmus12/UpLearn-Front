@@ -10,11 +10,17 @@ const HomePage: React.FC = () => {
   const { userRoles, isAuthenticated } = useAuthFlow();
 
   const handleLogin = () => {
-    navigate('/login');
+    // Redirigir directamente a Cognito para login
+    auth.signinRedirect();
   };
 
   const handleRegister = () => {
-    navigate('/register');
+    // Redirigir directamente a Cognito para registro
+    auth.signinRedirect({
+      extraQueryParams: {
+        signup: 'true'
+      }
+    });
   };
 
   const handleLogout = async () => {
@@ -22,9 +28,9 @@ const HomePage: React.FC = () => {
     auth.removeUser();
     
     // Luego redirigir a Cognito para cerrar sesión
-    const clientId = "lmk8qk12er8t8ql9phit3u12e";
+    const clientId = "342s18a96gl2pbaroorqh316l8";
     const logoutUri = "http://localhost:3000";
-    const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
+    const cognitoDomain = "https://us-east-18mvprkbvu.auth.us-east-1.amazoncognito.com";
     window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
 

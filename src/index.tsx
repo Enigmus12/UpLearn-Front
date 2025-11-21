@@ -4,11 +4,14 @@ import App from './App';
 import { AuthProvider } from "react-oidc-context";
 
 const cognitoAuthConfig = {
-  authority: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_SPlAn606f",
-  client_id: "lmk8qk12er8t8ql9phit3u12e",
+  authority: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_8mvpRkbVu",
+  client_id: "342s18a96gl2pbaroorqh316l8",
   redirect_uri: "http://localhost:3000",
   response_type: "code",
   scope: "email openid profile",
+  extraQueryParams: {
+    ui_locales: "es"
+  },
 };
 
 const root = ReactDOM.createRoot(

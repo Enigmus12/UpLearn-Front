@@ -111,9 +111,9 @@ const TutorDashboard: React.FC = () => {
   /* Logout (mantener base: una sola acción que hace local + redirección Cognito) */
   const handleLogout = async () => {
     auth.removeUser();
-    const clientId = "lmk8qk12er8t8ql9phit3u12e";
+    const clientId = "342s18a96gl2pbaroorqh316l8";
     const logoutUri = "http://localhost:3000";
-    const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
+    const cognitoDomain = "https://us-east-18mvprkbvu.auth.us-east-1.amazoncognito.com";
     globalThis.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
   const handleEditProfile = () => {
