@@ -3,8 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'r
 import { useAuth } from "react-oidc-context";
 import './App.css';
 import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
 import StudentDashboard from './pages/StudentDashboard';
 import TutorDashboard from './pages/TutorDashboard';
 import EditProfilePage from './pages/EditProfilePage';
@@ -47,10 +45,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
     );
   }
 
-  // No autenticado - redirigir a login
+  // No autenticado - redirigir a home
   if (!isAuthenticated) {
-    console.log('🔒 ProtectedRoute: Not authenticated, redirecting to login');
-    return <Navigate to="/login" replace />;
+    console.log('🔒 ProtectedRoute: Not authenticated, redirecting to home');
+    return <Navigate to="/" replace />;
   }
 
   // Necesita selección de roles - redirigir a role selection
@@ -94,9 +92,10 @@ const AuthRedirect: React.FC = () => {
       return;
     }
 
-    // No hacer nada si no está autenticado (mostrará LoginPage abajo)
+    // No hacer nada si no está autenticado (redirigirá a home)
     if (!isAuthenticated) {
-      console.log('🔒 AuthRedirect: No autenticado, mostrando login');
+      console.log('🔒 AuthRedirect: No autenticado, redirigiendo a home');
+      navigate('/', { replace: true });
       return;
     }
 
@@ -150,7 +149,7 @@ const AuthRedirect: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return <Navigate to="/" replace />;
   }
 
   // Estado mientras se está redirigiendo
@@ -196,8 +195,8 @@ const RoleSelectionProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ 
   }
 
   if (!isAuthenticated) {
-    console.log('🔒 RoleSelectionProtectedRoute: Not authenticated, redirecting to login');
-    return <Navigate to="/login" replace />;
+    console.log('🔒 RoleSelectionProtectedRoute: Not authenticated, redirecting to home');
+    return <Navigate to="/" replace />;
   }
   // Si no necesita selección de roles, redirigir
   if (!needsRoleSelection) {
@@ -218,7 +217,7 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<AuthRedirect />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register" element={<Navigate to="/" replace />} />
           
           <Route 
             path="/role-selection" 
