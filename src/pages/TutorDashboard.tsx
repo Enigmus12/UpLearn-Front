@@ -10,7 +10,6 @@ import ProfileIncompleteNotification from '../components/ProfileIncompleteNotifi
 import TutorAvailabilityPage from './TutorAvailabilityPage';
 import TutorClassesPage from './TutorClassesPage';
 import TutorStudentsPage from './TutorStudentsPage';
-import { ChatWidget } from '../components/chat/ChatWidget'; 
 
 /* Tipos */
 interface User {
@@ -109,9 +108,9 @@ const TutorDashboard: React.FC = () => {
 
   const handleLogout = async () => {
     auth.removeUser();
-    const clientId = "lmk8qk12er8t8ql9phit3u12e";
+    const clientId = "342s18a96gl2pbaroorqh316l8";
     const logoutUri = "http://localhost:3000";
-    const cognitoDomain = "https://us-east-1splan606f.auth.us-east-1.amazoncognito.com";
+    const cognitoDomain = "https://us-east-18mvprkbvu.auth.us-east-1.amazoncognito.com";
     globalThis.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
   const handleEditProfile = () => {
@@ -141,11 +140,9 @@ const TutorDashboard: React.FC = () => {
             <button className={`nav-item ${activeSection === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveSection('dashboard')}><span>📊</span> Dashboard</button>
             <button className={`nav-item ${activeSection === 'my-students' ? 'active' : ''}`} onClick={() => setActiveSection('my-students')}><span>👥</span> Mis Estudiantes</button>
             
-            {/* --- INICIO DEL CAMBIO --- */}
             <button className={`nav-item ${activeSection === 'sessions' ? 'active' : ''}`} onClick={() => setActiveSection('sessions')}><span>📬</span> Solicitudes</button>
             <button className={`nav-item ${activeSection === 'availability' ? 'active' : ''}`} onClick={() => setActiveSection('availability')}><span>🗓️</span> Disponibilidad</button>
             <button className={`nav-item ${activeSection === 'requests' ? 'active' : ''}`} onClick={() => setActiveSection('requests')}><span>🎓</span> Mis Clases</button>
-            {/* --- FIN DEL CAMBIO --- */}
 
             <button className={`nav-item ${activeSection === 'create-session' ? 'active' : ''}`} onClick={() => setActiveSection('create-session')}><span>➕</span> Nueva Clase</button>
           </nav>
@@ -251,7 +248,6 @@ const TutorDashboard: React.FC = () => {
         {activeSection === 'create-session' && <div className="create-session-section"><h1>Crear Nueva Clase ➕</h1></div>}
       </main>
       
-      {isAuthenticated && <ChatWidget />}
     </div>
   );
 };

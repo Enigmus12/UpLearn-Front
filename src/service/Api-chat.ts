@@ -1,8 +1,7 @@
 import { ENV } from '../utils/env';
 
-const CHAT_BASE = ENV.CHAT_API_BASE; // http://localhost:8091
+const CHAT_BASE = (ENV.CHAT_API_BASE || 'http://localhost:8091').replace(/\/$/, '');
 
-// Definir los tipos para mayor claridad
 export interface ChatContact {
   id: string;
   sub: string;
@@ -14,38 +13,60 @@ export interface ChatContact {
 export interface ChatMessageData {
   id: string;
   chatId: string;
-  senderId: string;
-  recipientId: string;
+  fromUserId: string;
+  toUserId: string;
   content: string;
-  timestamp: string; // ISO string
+  createdAt: string;
   delivered: boolean;
   read: boolean;
 }
 
-/**
- * Obtiene la lista de contactos con los que el usuario puede chatear.
- */
+/** Lista de contactos disponibles para el usuario autenticado */
 export async function getChatContacts(token: string): Promise<ChatContact[]> {
   const url = `${CHAT_BASE}/api/chat/contacts`;
-  const response = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}` }
-  });
-  if (!response.ok) {
-    throw new Error('No se pudo obtener la lista de contactos');
-  }
-  return response.json();
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!resp.ok) throw new Error('No se pudo cargar contactos');
+  return resp.json();
 }
 
-/**
- * Obtiene el historial de mensajes para un chatId específico.
- */
+/** Calcula chatId estable con otro usuario */
+export async function getChatIdWith(otherUserId: string, token: string): Promise<string> {
+  const url = `${CHAT_BASE}/api/chat/chat-id/with/${encodeURIComponent(otherUserId)}`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!resp.ok) throw new Error('No se pudo calcular chatId');
+  const data = await resp.json();
+  return data.chatId;
+}
+
+/** Historial de un chat */
 export async function getChatHistory(chatId: string, token: string): Promise<ChatMessageData[]> {
-  const url = `${CHAT_BASE}/api/chat/history/${chatId}`;
-  const response = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}` }
-  });
-  if (!response.ok) {
-    throw new Error('No se pudo cargar el historial del chat');
+  const url = `${CHAT_BASE}/api/chat/history/${encodeURIComponent(chatId)}`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!resp.ok) throw new Error('No se pudo cargar el historial del chat');
+  return resp.json();
+}
+
+/* ---------- Utilidades ---------- */
+function bufferToHex(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let hex = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    hex += (b < 16 ? '0' : '') + b.toString(16);
   }
-  return response.json();
+  return hex;
+}
+/** Genera un chatId estable localmente (sha256 de ambos IDs concatenados) */
+export async function localStableChatId(a: string, b: string): Promise<string> {
+  const [min, max] = [a, b].sort((x, y) => x.localeCompare(y));
+  const key = `${min}:${max}`;
+  try {
+    // WebCrypto (disponible en browsers modernos)
+    const enc = new TextEncoder().encode(key);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return bufferToHex(buf);
+  } catch {
+
+    return key;
+  }
 }

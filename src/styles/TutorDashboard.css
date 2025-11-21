@@ -72,7 +72,7 @@
   margin: var(--spacing-xs) 0;
   color: var(--text-muted);
   font-size: var(--font-size-sm);
-}
+} 
 
 .student-details,
 .request-content {
@@ -567,7 +567,78 @@
 /* Estilo para botones deshabilitados */
 .btn-action:disabled {
   background-color: #e5e7eb;
-  color: #9ca3af;
+  color: #374151;
   cursor: not-allowed;
   box-shadow: none;
 }
+/* ---- Filtros card arriba ---- */
+.filters-card {
+  background: var(--bg-primary);
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 12px;
+  margin: 8px 0 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.filters-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  position: relative;
+  flex: 1 1 280px;
+}
+.search-input input {
+  width: 100%;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 10px 36px 10px 12px;
+  background: #F9FAFB;
+}
+.search-input .search-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: .6;
+}
+
+.status-select {
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #F9FAFB;
+}
+
+.past-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+/* ---- Tarjetas de grupo (sin inicial/emoji) ---- */
+.student-group-card {
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.student-group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #F3F4F6;
+}
+.student-group-header img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+.avatar-neutral { width: 44px; height: 44px; border-radius: 50%; background: #E5E7EB; }
+
+/* ya tienes .reservation-row, .btn-action, etc. */

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ChatContact, ChatMessageData, getChatHistory } from '../../service/Api-chat';
+import React, { useEffect, useRef, useState } from 'react';
+import { ChatContact, ChatMessageData, getChatHistory, getChatIdWith, localStableChatId } from '../../service/Api-chat';
 import { ChatSocket } from '../../service/ChatSocket';
 import { ChatMessageBubble } from './ChatMessageBubble';
 
@@ -8,62 +8,94 @@ interface ChatWindowProps {
   myUserId: string;
   token: string;
 }
+/** Mapea cualquier objeto recibido */
+const mapAnyToServerShape = (raw: any, fallbackChatId: string): ChatMessageData => ({
+  id: String(raw?.id ?? cryptoRandomId()),
+  chatId: String(raw?.chatId ?? fallbackChatId),
+  fromUserId: String(raw?.fromUserId ?? raw?.senderId ?? raw?.from ?? raw?.userId ?? ''),
+  toUserId: String(raw?.toUserId ?? raw?.recipientId ?? raw?.to ?? ''),
+  content: String(raw?.content ?? raw?.text ?? ''),
+  createdAt: String(raw?.createdAt ?? raw?.timestamp ?? new Date().toISOString()),
+  delivered: Boolean(raw?.delivered ?? false),
+  read: Boolean(raw?.read ?? false),
+});
+/** Genera ID estable localmente (sha256 de ambos IDs concatenados) */
+function cryptoRandomId(): string {
+  try { return crypto.getRandomValues(new Uint32Array(4)).join('-'); }
+  catch { return `${Date.now()}-${Math.random()}`; }
+}
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ contact, myUserId, token }) => {
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [socket] = useState(() => new ChatSocket());
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const chatId = [myUserId, contact.id].sort().join(':');
+  const socketRef = useRef<ChatSocket | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const chatIdRef = useRef<string>(''); 
 
   useEffect(() => {
-    // Cargar historial
-    getChatHistory(chatId, token).then(setMessages);
+    socketRef.current = new ChatSocket();
+    socketRef.current.connect(
+      token,
+      (incoming: unknown) => {
+        const raw = (incoming && typeof (incoming as { data?: unknown }).data === 'string')
+          ? JSON.parse((incoming as MessageEvent).data as string)
+          : incoming;
+        const msg = mapAnyToServerShape(raw, chatIdRef.current || 'unknown');
 
-    // Conectar WebSocket
-    socket.connect(token, (event) => {
-      const msg = JSON.parse(event.data);
-      // Solo procesar mensajes de este chat
-      if (msg.chatId === chatId) {
-        setMessages(prev => [...prev, msg]);
+        // Solo mensajes del chat actual
+        if (!chatIdRef.current || msg.chatId === chatIdRef.current) {
+          setMessages(prev => [...prev, msg]);
+        }
+      },
+      (state) => console.log(`Socket state: ${state}`)
+    );
+    return () => {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
+  }, [token]);
+
+  // Cargar chatId + historial cuando cambia el contacto
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      let cid: string;
+      try {
+        cid = await getChatIdWith(contact.id, token);
+      } catch {
+        cid = await localStableChatId(myUserId, contact.id); // idéntico al back
+        console.warn('getChatIdWith falló. Usando chatId local (sha256):', cid);
       }
-    }, (state) => console.log(`Socket state: ${state}`));
+      if (!mounted) return;
+      chatIdRef.current = cid;
+      chatIdRef.current = cid;
+      const hist = await getChatHistory(cid, token).catch(() => []);
+      if (!mounted) return;
+      setMessages((hist as any[]).map(h => mapAnyToServerShape(h, cid)));
+    })();
+    return () => { mounted = false; };
+  }, [contact.id, myUserId, token]);
 
-    return () => socket.disconnect();
-  }, [chatId, token, socket]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newMessage.trim()) {
-      socket.sendMessage(contact.id, newMessage);
-      setNewMessage('');
-    }
+    if (!newMessage.trim()) return;
+    socketRef.current?.sendMessage(contact.id, newMessage);
+    setNewMessage('');
   };
 
   return (
     <div className="chat-window">
-      <div className="chat-window-header">
-        <h4>{contact.name}</h4>
-      </div>
+      <div className="chat-window-header"><h4>{contact.name}</h4></div>
       <div className="chat-messages">
-        {messages.map(msg => (
-          <ChatMessageBubble key={msg.id} message={msg} isMine={msg.senderId === myUserId} />
+        {messages.map(m => (
+          <ChatMessageBubble key={m.id} message={m} isMine={m.fromUserId === myUserId} />
         ))}
-        <div ref={messagesEndRef} />
+        <div ref={endRef} />
       </div>
-      <form className="chat-input-form" onSubmit={handleSendMessage}>
-        <input
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Escribe un mensaje..."
-        />
+      <form className="chat-input-form" onSubmit={handleSend}>
+        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Escribe un mensaje..." />
         <button type="submit">Enviar</button>
       </form>
     </div>

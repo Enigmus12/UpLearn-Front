@@ -1,74 +1,141 @@
 import { ENV } from '../utils/env';
 
-const CHAT_WS_BASE = ENV.CHAT_API_BASE.replace(/^http/, 'ws');
+const CHAT_WS_BASE = (ENV.CHAT_API_BASE || 'http://localhost:8091')
+  .replace(/^http/, 'ws')
+  .replace(/\/$/, '');
 
-type WebSocketEventCallback = (event: MessageEvent) => void;
+export type State = 'connecting' | 'open' | 'closed' | 'error';
+export type OnMessage = (event: MessageEvent) => void;
+export type OnState = (state: State) => void;
 
-/**
- * Cliente para manejar la conexión WebSocket del chat.
- */
+/** WS cliente con anti-doble conexión, keep-alive y cierre seguro en CONNECTING. */
 export class ChatSocket {
   private ws: WebSocket | null = null;
-  private onMessageCallback: WebSocketEventCallback | null = null;
-  private onStateChangeCallback: ((state: 'connecting' | 'open' | 'closed' | 'error') => void) | null = null;
+  private onMessageCb: OnMessage | null = null;
+  private onStateCb: OnState | null = null;
+  private keepAliveTimer: any = null;
+  private outbox: string[] = [];
+  private lastUrl: string | null = null;
 
-  connect(token: string, onMessage: WebSocketEventCallback, onStateChange: (state: 'connecting' | 'open' | 'closed' | 'error') => void) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('WebSocket ya está conectado.');
-      return;
+  private wasEverOpen = false;
+  private suppressClose = false;
+  private cancelled = false;
+
+  connect(token: string, onMessage: OnMessage, onState: OnState) {
+    this.onMessageCb = onMessage;
+    this.onStateCb = onState;
+
+    const url = `${CHAT_WS_BASE}/ws/chat?token=${encodeURIComponent(token)}`;
+
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) &&
+      this.lastUrl === url
+    ) {
+      return; // ya conectando o abierto a la misma URL
     }
 
-    this.onMessageCallback = onMessage;
-    this.onStateChangeCallback = onStateChange;
-    this.onStateChangeCallback('connecting');
+    // Si hay una conexión abierta a otra URL, ciérrala con cortesía
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.lastUrl !== url) {
+      try { this.ws.close(1000, 'switch transport'); } catch {}
+    }
 
-    // --- INICIO DE LA CORRECCIÓN DEFINITIVA ---
-    // Tu backend espera el token como parte de la ruta (path), no como un parámetro de consulta (query).
-    // Construimos la URL en el formato: ws://host/chat/EL_TOKEN
-    const encodedToken = encodeURIComponent(token);
-    const url = `${CHAT_WS_BASE}/chat/${encodedToken}`;
-    // --- FIN DE LA CORRECCIÓN DEFINITIVA ---
-
-    console.log(`Intentando conectar a WebSocket en: ${url}`); // Log para depuración
     this.ws = new WebSocket(url);
+    this.lastUrl = url;
+    this.wasEverOpen = false;
+    this.suppressClose = false;
+    this.cancelled = false;
+
+    this.onStateCb?.('connecting');
 
     this.ws.onopen = () => {
-      console.log('WebSocket conectado.');
-      this.onStateChangeCallback?.('open');
+      this.wasEverOpen = true;
+      if (this.cancelled) {
+        // Si nos “cancelaron” durante CONNECTING, cerrar inmediatamente y sin logs
+        try { this.ws?.close(1000, 'cancelled before open'); } catch {}
+        return;
+      }
+
+      this.onStateCb?.('open');
+
+      // Enviar pendientes
+      if (this.outbox.length) {
+        for (const p of this.outbox) {
+          try { this.ws?.send(p); } catch {}
+        }
+        this.outbox = [];
+      }
+
+      // Keep-alive para proxies/firewalls
+      this.keepAliveTimer = setInterval(() => {
+        try { this.ws?.send(JSON.stringify({ type: 'ping', ts: Date.now() })); } catch {}
+      }, 25000);
     };
 
-    this.ws.onmessage = (event) => {
-      this.onMessageCallback?.(event);
+    this.ws.onerror = () => {
+      if (!this.cancelled) this.onStateCb?.('error');
     };
 
-    this.ws.onerror = (error) => {
-      console.error('Error en WebSocket:', error);
-      this.onStateChangeCallback?.('error');
-    };
-
-    this.ws.onclose = (event) => {
-      console.log(`WebSocket desconectado: Código=${event.code}, Razón=${event.reason}`);
+    this.ws.onclose = () => {
+      if (!this.suppressClose) this.onStateCb?.('closed');
+      if (this.keepAliveTimer) {
+        clearInterval(this.keepAliveTimer);
+        this.keepAliveTimer = null;
+      }
       this.ws = null;
-      this.onStateChangeCallback?.('closed');
+      this.lastUrl = null;
+      this.wasEverOpen = false;
+      this.suppressClose = false;
     };
+
+    this.ws.onmessage = (ev) => this.onMessageCb?.(ev);
   }
 
-  sendMessage(recipientId: string, content: string) {
+  /** Encola si OPEN aún no está listo. */
+  sendMessage(toUserId: string, content: string) {
+    const payload = JSON.stringify({ toUserId, content });
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      const message = JSON.stringify({ recipientId, content });
-      this.ws.send(message);
+      this.ws.send(payload);
     } else {
-      console.error('No se puede enviar el mensaje. WebSocket no está conectado.');
+      this.outbox.push(payload);
+      console.warn('WebSocket no listo, mensaje encolado.');
     }
   }
 
   disconnect() {
-    if (this.ws) {
-      this.ws.close();
+    this.cancelled = true;
+
+    if (this.keepAliveTimer) {
+      clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = null;
     }
+    if (!this.ws) return;
+
+    if (this.ws.readyState === WebSocket.CONNECTING) {
+      this.suppressClose = true;         
+      this.ws.onmessage = null;
+      this.ws.onerror = null;
+      const ws = this.ws;
+      ws.onopen = () => { try { ws.close(1000, 'cancelled on open'); } catch {} };
+      this.ws = null;
+      this.lastUrl = null;
+      this.outbox = [];
+      return;
+    }
+
+    try {
+      this.suppressClose = !this.wasEverOpen; 
+      if (this.ws.readyState !== WebSocket.CLOSED) {
+        this.ws.close(1000, 'client closing');
+      }
+    } catch {}
+
+    this.ws = null;
+    this.lastUrl = null;
+    this.outbox = [];
   }
 
   isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return !!this.ws && this.ws.readyState === WebSocket.OPEN;
   }
 }
