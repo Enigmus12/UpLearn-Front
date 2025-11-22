@@ -204,7 +204,6 @@
   padding: 1rem;
 }
 
-/* Force visibility for user info elements */
 .user-info p {
   color: #333 !important;
   margin: 0;
@@ -222,7 +221,6 @@
   margin-top: 0.25rem !important;
 }
 
-/* Override global dashboard container styles for dropdown */
 .dashboard-container .user-dropdown p {
   color: #333 !important;
 }
@@ -268,7 +266,6 @@
   background: #fef2f2;
 }
 
-/* Main Content */
 .dashboard-main {
   max-width: 1400px;
   margin: 0 auto;
@@ -281,7 +278,6 @@
   font-size: 2rem;
 }
 
-/* Stats Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -329,7 +325,6 @@
   font-size: 0.9rem;
 }
 
-/* Recent Activity */
 .recent-activity {
   background: white;
   border-radius: 12px;
@@ -373,8 +368,6 @@
   font-size: 0.85rem;
 }
 
-/* Buscar tutores  */
-/* Contenedor principal de la sección */
 .dashboard-container .tutors-section .tutor-search {
   max-width: 760px;
   margin: 0 auto;
@@ -384,12 +377,10 @@
   box-shadow: 0 8px 28px rgba(17, 24, 39, 0.08);
 }
 
-/* Título */
 .dashboard-container .tutors-section .tutor-search h2 {
   display: none !important;
 }
 
-/* Formulario de búsqueda */
 .dashboard-container .tutor-search-form {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -445,7 +436,6 @@
   box-shadow: none;
 }
 
-/* Mensajes de error / vacío */
 .dashboard-container .tutor-search .error {
   margin: .25rem 0 0 0;
   color: #b91c1c !important;
@@ -459,16 +449,13 @@
   justify-items: start;
 }
 
-/* Resultados */
 .dashboard-container .tutor-results {
   display: grid;
   grid-template-columns: 700px;
   justify-content: start;
-  /* la columna pegada a la izquierda */
   gap: 1rem;
 }
 
-/* Tarjeta de tutor */
 .dashboard-container .tutor-card {
   background: #fff;
   border: 1px solid #eef2f7;
@@ -478,7 +465,6 @@
   transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
   width: 700px;
   max-width: 700px;
-  /* evita que se encoja */
   text-align: left;
 }
 
@@ -488,7 +474,6 @@
   border-color: #33518f;
 }
 
-/* Encabezado de la tarjeta */
 .dashboard-container .tutor-card-header {
   display: flex;
   align-items: center;
@@ -516,7 +501,6 @@
   word-break: break-all;
 }
 
-/* Bio */
 .dashboard-container .tutor-bio {
   margin: .5rem 0 .75rem 0;
   color: #4b5563 !important;
@@ -524,7 +508,6 @@
   font-size: .95rem;
 }
 
-/* Tags de especialización */
 .dashboard-container .tutor-tags {
   display: flex;
   flex-wrap: wrap;
@@ -541,7 +524,6 @@
   font-weight: 600;
 }
 
-/* Responsive */
 @media (max-width: 640px) {
   .dashboard-container .tutor-search {
     padding: 1.25rem;
@@ -557,7 +539,6 @@
 }
 
 
-/* Tasks Grid */
 .dashboard-container .tasks-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -585,7 +566,6 @@
   margin-bottom: 1rem;
 }
 
-/* Ensure all task card content is visible */
 .dashboard-container .task-card * {
   color: inherit !important;
 }
@@ -648,12 +628,10 @@
   gap: 0.75rem;
 }
 
-/* Ensure task action buttons are visible */
 .dashboard-container .task-actions button {
   color: inherit !important;
 }
 
-/* Post Task Form */
 .task-form-container {
   max-width: 800px;
 }
@@ -775,7 +753,6 @@
   font-size: 1rem;
 }
 
-/* Loading */
 .loading {
   display: flex;
   justify-content: center;
@@ -785,7 +762,6 @@
   color: #667eea;
 }
 
-/* Responsive Design */
 @media (max-width: 768px) {
   .header-content {
     flex-direction: column;
@@ -858,30 +834,22 @@
     --u-ghost: #F3F4F6;
     --u-ghost-hover: #EEF2FF;
     --u-green: #065F46;
-    /* verde oscuro */
     --u-green-200: #BBF7D0;
-    /* bg disponible hover */
     --u-green-100: #DCFCE7;
-    /* bg disponible base */
     --u-green-050: #ECFDF5;
   }
 
-  /* tarjeta contenedora del grid ya existe como .card; reforzamos */
   .calendar-container.card {
-    /* Grid más ordenado */
-    /* merged into the earlier .calendar-grid rule to avoid duplicate selector */
     border-radius: 12px;
     overflow: hidden;
     background: var(--u-card);
   }
 
-  /* Columna de horas */
   .col.hour-col {
     background: #FAFBFF;
     border-right: 1px solid var(--u-border);
   }
 
-  /* Scope hour-specific layout to the hour column to avoid duplicating the global .hour-cell selector */
   .col.hour-col .hour-cell {
     height: 42px;
     display: grid;
@@ -891,23 +859,17 @@
     border-bottom: 1px solid var(--u-border);
   }
 
-  /* Columnas de días */
-  /* .col rules moved above to avoid duplicate selector */
   .col.day-col .head-cell {
     height: 56px;
     display: grid;
     place-items: center;
     text-align: center;
     font-weight: 600;
-    /* Celdas */
-    /* merged into the earlier .cell rule to avoid duplicate selector */
     border-left: 1px solid var(--u-border);
     background: #fff;
     transition: transform .06s ease, box-shadow .15s ease;
   }
 
-  /* Estados */
-  /* Duplicate .cell.disabled removed (styles should be defined in the earlier .cell.disabled rule) */
   .cell.taken {
     background: #F3F4F6;
   }
@@ -925,13 +887,11 @@
     background: var(--u-green-200);
   }
 
-  /* Selección marcada con verde oscuro (consolidated above) */
   .cell.selected {
     background: var(--u-green-050);
     box-shadow: inset 0 0 0 2px var(--u-green), 0 0 0 2px rgba(6, 95, 70, .05);
   }
 
-  /* Navegación de semana */
   .week-nav {
     display: flex;
     align-items: center;
@@ -946,7 +906,6 @@
     letter-spacing: .2px;
   }
 
-  /* Botón fantasma usado en semana anterior/siguiente */
   .btn-ghost {
     border: 1px solid var(--u-border);
     background: var(--u-ghost);
@@ -963,7 +922,6 @@
     border-color: #C7D2FE;
   }
 
-  /* Week nav resaltada */
   .week-nav.week-nav--highlight {
     background: linear-gradient(135deg, #6d6ae8 0%, #7c3aed 100%);
     color: #fff;
@@ -973,7 +931,6 @@
     gap: 12px;
     padding: 12px 16px;
     border: 0;
-    /* quitar borde de la card para que se vea limpia */
     box-shadow: 0 6px 20px rgba(124, 58, 237, .25);
   }
 
@@ -984,7 +941,6 @@
     flex: 1;
   }
 
-  /* Scoped hover for buttons inside highlighted week-nav to avoid duplicate global hover rules */
   .week-nav.week-nav--highlight .btn-ghost:hover {
     background: rgba(255, 255, 255, .08);
     border-color: rgba(255, 255, 255, .85);
@@ -999,7 +955,6 @@
     outline-offset: 2px;
   }
 
-  /* Panel azul tipo primary */
   .card--primary-soft {
     max-width: 900px;
     margin: 20px auto;
@@ -1011,7 +966,6 @@
     border: 0;
   }
 
-  /* Barra de semana */
   .week-toolbar {
     display: flex;
     align-items: center;
@@ -1027,13 +981,11 @@
     flex: 1;
   }
 
-  /* Lista de reservas */
   .reservations-list {
     display: grid;
     gap: 12px;
   }
 
-  /* Tarjeta de reserva con hover highlight */
   .reservation-card {
     background: #fff;
     color: #111827;
@@ -1075,7 +1027,6 @@
     margin-top: 12px;
   }
 
-  /* Píldora de estado */
   .status-pill {
     display: inline-block;
     padding: 4px 10px;
@@ -1085,7 +1036,6 @@
     line-height: 1;
   }
 
-  /* Nota vacía */
   .empty-note {
     background: rgba(255, 255, 255, .25);
     border: 1px dashed rgba(255, 255, 255, .5);
@@ -1094,4 +1044,83 @@
     border-radius: 12px;
     text-align: center;
   }
+}
+:root{
+  --app-primary: #0ea5e9;       
+  --app-primary-hover: #0284c7;
+
+  --app-success: #10b981;       
+  --app-success-hover: #059669;
+
+  --app-danger: #ef4444;        
+  --app-danger-hover: #dc2626;
+
+  --app-muted: #6b7280;
+}
+
+.btn-danger,
+.btn-success,
+.btn-action{
+  color: #fff !important;                  
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  transition: transform .05s ease, filter .15s ease, background-color .15s ease, border-color .15s ease;
+}
+.btn-danger:hover,
+.btn-success:hover,
+.btn-action:hover{
+  filter: brightness(1.02);
+  transform: translateY(-1px);
+}
+
+
+.btn-success,
+.btn-action.btn-contact{
+  background: var(--app-success);
+}
+.btn-success:hover,
+.btn-action.btn-contact:hover{
+  background: var(--app-success-hover);
+}
+
+.btn-danger,
+.btn-action.btn-cancel{
+  background: var(--app-danger);
+}
+.btn-danger:hover,
+.btn-action.btn-cancel:hover{
+  background: var(--app-danger-hover);
+}
+
+.btn-ghost{
+  color: #fff !important;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.25);
+}
+.btn-ghost:hover{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.35);
+}
+
+.reservation-card__actions{
+  display: flex;
+  gap: 12px;                      
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.reservation-card .btn,
+.reservation-card .btn-action{
+  color: #fff !important;
+}
+
+button[style*="pink"],
+.btn-pink{
+  background: var(--app-primary) !important;
+  color: #fff !important;
+  border-color: transparent !important;
 }
