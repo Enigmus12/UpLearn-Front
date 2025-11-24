@@ -102,7 +102,6 @@ const TutorStudentsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
 
-  // Helpers to reduce nesting and keep sort non-mutating
   const groupReservationsByStudent = (reservations: Reservation[]) => {
     const map: Record<string, Reservation[]> = {};
     for (const res of reservations) {
@@ -162,7 +161,6 @@ const TutorStudentsPage: React.FC = () => {
         const reservationsByStudent = groupReservationsByStudent(reservations);
         const studentIds = Object.keys(reservationsByStudent);
 
-        // if no students, set empty and exit early
         if (studentIds.length === 0) {
           setStudents([]);
           return;
@@ -171,7 +169,6 @@ const TutorStudentsPage: React.FC = () => {
         const profiles = await fetchProfilesForStudentIds(studentIds, token);
         const studentData = buildStudentData(reservationsByStudent, profiles);
 
-        // sort: active first, then by name
         studentData.sort((a, b) => {
           if (a.status === b.status) return a.profile.name!.localeCompare(b.profile.name!);
           return a.status === 'active' ? -1 : 1;

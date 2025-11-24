@@ -726,7 +726,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #5a55e2 0%, #693a92 100%);
   color: white;
 }
 
@@ -737,7 +737,7 @@
 
 .btn-secondary {
   background: #f3f4f6;
-  color: #374151;
+  color: #1f2937;
   border: 1px solid #d1d5db;
 }
 
@@ -934,7 +934,7 @@
     margin: 20px auto;
     padding: 18px;
     border-radius: 16px;
-    background: linear-gradient(135deg, #6d6ae8 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, #4f46e5 0%, #693a92 100%);
     color: #fff;
     box-shadow: 0 10px 24px rgba(124, 58, 237, .18);
     border: 0;
@@ -1070,7 +1070,7 @@
 }
 
 .btn-ghost{
-  color: #fff !important;
+  color: #1f2937 !important;
   background: transparent;
   border: 1px solid rgba(255,255,255,.25);
 }
@@ -1171,7 +1171,7 @@ button:disabled,
 .btn-action:disabled,
 .btn-ghost:disabled {
   background: #9ca3af !important;   /* gris */
-  color: #f9fafb !important;
+  color: #e5e7eb !important;
   border-color: #9ca3af !important;
   cursor: not-allowed !important;
   opacity: .65 !important;

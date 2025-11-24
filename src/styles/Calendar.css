@@ -83,7 +83,7 @@
   background: #059669;
   border-color: #059669;
   box-shadow: inset 0 0 0 1px rgba(5, 150, 105, 0.4);
-  color: #ffffff;
+  color: #0f172a;
 }
 
 .cell.pending {
@@ -215,13 +215,13 @@
 
 .week-nav .btn-ghost {
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.22);
   border-color: rgba(255, 255, 255, 0.3);
 }
 
 .week-nav .btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.30);
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
 .week-nav__title {

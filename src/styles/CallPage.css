@@ -330,18 +330,18 @@
 
 /* Estado: Apagado (Mic/Cam Off) */
 .call-btn.off {
-  background-color: #ef4444; /* Rojo suave */
-  color: white;
+  background-color: #b91c1c; 
+  color: var(--text-white);
 }
 
 .call-btn.off:hover {
-  background-color: #dc2626;
+  background-color: #b91c1c;
 }
 
 /* Estado: Compartiendo pantalla */
 .call-btn.active-share {
   background-color: #6366f1; /* Indigo */
-  color: white;
+  color: var(--text-white);
   box-shadow: 0 0 15px rgba(99, 102, 241, 0.5);
 }
 
