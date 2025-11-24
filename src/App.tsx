@@ -12,30 +12,34 @@ import TutorAvailabilityPage from './pages/TutorAvailabilityPage';
 import TutorClassesPage from './pages/TutorClassesPage';
 import ProfileViewPage from './pages/ProfileViewPage';
 import BookTutorPage from './pages/BookTutorPage';
+import TutorMeetingsNowPage from './pages/TutorMeetingsNowPage';
+import CallPage from './pages/CallPage';
+import StudentReservationsPage from './pages/StudentReservationsPage';
+import StudentFindsTutorsPage from './pages/StudentFindsTutorsPage';
 
 // Protected Route Component
-const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ 
-  children, 
-  allowedRoles 
+const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({
+  children,
+  allowedRoles
 }) => {
   const { isLoading, isAuthenticated, userRoles, needsRoleSelection } = useAuthFlow();
 
-  console.log('🛡️ ProtectedRoute check:', { 
+  console.log('🛡️ ProtectedRoute check:', {
     isAuthenticated,
     isLoading,
     allowedRoles,
     userRoles,
     needsRoleSelection
   });
-  
+
   // Mientras se carga, mostrar indicador
   if (isLoading) {
     console.log('⏳ ProtectedRoute: Cargando...');
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
         fontSize: '18px'
       }}>
@@ -59,7 +63,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   // Verificar roles específicos si se especificaron
   if (allowedRoles && allowedRoles.length > 0) {
     console.log('🎭 ProtectedRoute: User roles:', userRoles, 'Allowed roles:', allowedRoles);
-    
+
     if (!userRoles || !userRoles.some(role => allowedRoles.includes(role))) {
       console.log('❌ ProtectedRoute: Role not allowed, redirecting to home');
       return <Navigate to="/" replace />;
@@ -77,8 +81,8 @@ const AuthRedirect: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    console.log('📍 AuthRedirect useEffect:', { 
-      isAuthenticated, 
+    console.log('📍 AuthRedirect useEffect:', {
+      isAuthenticated,
       isLoading,
       needsRoleSelection,
       userRoles,
@@ -117,10 +121,10 @@ const AuthRedirect: React.FC = () => {
   // Mostrar estados de carga o error
   if (auth.isLoading || isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
         fontSize: '18px'
       }}>
@@ -131,11 +135,11 @@ const AuthRedirect: React.FC = () => {
   // Mostrar error si existe
   if (auth.error || error) {
     return (
-      <div style={{ 
-        display: 'flex', 
+      <div style={{
+        display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'center', 
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
         gap: '20px'
       }}>
@@ -153,11 +157,11 @@ const AuthRedirect: React.FC = () => {
 
   // Estado mientras se está redirigiendo
   return (
-    <div style={{ 
-      display: 'flex', 
+    <div style={{
+      display: 'flex',
       flexDirection: 'column',
-      justifyContent: 'center', 
-      alignItems: 'center', 
+      justifyContent: 'center',
+      alignItems: 'center',
       height: '100vh',
       gap: '20px'
     }}>
@@ -170,8 +174,8 @@ const AuthRedirect: React.FC = () => {
 // Role Selection Protection Component
 const RoleSelectionProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isLoading, isAuthenticated, needsRoleSelection, userRoles } = useAuthFlow();
-  
-  console.log('🎭 RoleSelectionProtectedRoute check:', { 
+
+  console.log('🎭 RoleSelectionProtectedRoute check:', {
     isAuthenticated,
     isLoading,
     needsRoleSelection,
@@ -181,10 +185,10 @@ const RoleSelectionProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ 
   if (isLoading) {
     console.log('⏳ RoleSelectionProtectedRoute: Cargando...');
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
         fontSize: '18px'
       }}>
@@ -217,40 +221,47 @@ const App: React.FC = () => {
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<AuthRedirect />} />
           <Route path="/register" element={<Navigate to="/" replace />} />
-          
-          <Route 
-            path="/role-selection" 
+
+          <Route
+            path="/role-selection"
             element={
               <RoleSelectionProtectedRoute>
                 <RoleSelectionPage />
               </RoleSelectionProtectedRoute>
-            } 
+            }
           />
-          
-          <Route 
-            path="/student-dashboard" 
+
+          <Route
+            path="/student-dashboard"
             element={
               <ProtectedRoute allowedRoles={['student']}>
                 <StudentDashboard />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/tutor-dashboard" 
+          <Route
+            path="/tutor-dashboard"
             element={
               <ProtectedRoute allowedRoles={['tutor']}>
                 <TutorDashboard />
               </ProtectedRoute>
-            } 
+            }
           />
-
-          <Route 
-            path="/availability" 
+          <Route
+            path="/tutor/mis-clases-simple"
+            element={
+              <ProtectedRoute allowedRoles={['tutor']}>
+                <TutorMeetingsNowPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/availability"
             element={
               <ProtectedRoute allowedRoles={['tutor']}>
                 <TutorAvailabilityPage />
               </ProtectedRoute>
-            } 
+            }
           />
           <Route
             path="/profile/:role/:userId"
@@ -269,23 +280,45 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          <Route 
-            path="/tutor-classes" 
+          <Route
+            path="/tutor-classes"
             element={
               <ProtectedRoute allowedRoles={['tutor']}>
                 <TutorClassesPage />
               </ProtectedRoute>
-            } 
+            }
           />
-          
-          <Route 
-            path="/edit-profile" 
+
+          <Route
+            path="/edit-profile"
             element={
               <ProtectedRoute>
                 <EditProfilePage />
               </ProtectedRoute>
-            } 
+            }
           />
+          <Route
+            path="/call/:sessionId"
+            element={<ProtectedRoute allowedRoles={['student', 'tutor']}>
+              <CallPage />
+            </ProtectedRoute>} />
+            <Route
+              path="/student-reservations"
+              element={
+                <ProtectedRoute allowedRoles={['student']}>
+                  <StudentReservationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student-finds-tutors"
+              element={
+                <ProtectedRoute allowedRoles={['student']}>
+                  <StudentFindsTutorsPage />
+                </ProtectedRoute>
+              }
+            />
+          
 
         </Routes>
       </div>

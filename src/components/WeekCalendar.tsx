@@ -3,7 +3,7 @@ import '../styles/Calendar.css';
 import type { ScheduleCell, CellStatus } from '../service/Api-scheduler';
 
 export type Mode = 'student' | 'tutor';
-/** Props para WeekCalendar */
+
 export interface WeekCalendarProps {
   weekStart: string;
   cells: ScheduleCell[];
@@ -15,85 +15,88 @@ export interface WeekCalendarProps {
   onNextWeek?: () => void;
   onClear?: () => void;
 }
-/** Convierte hora a HH:mm */
+
+/** HH:mm normalizado */
 function toHHMM(h: string) {
   const s = (h ?? '').trim();
-  const regex = /^(\d{1,2}):(\d{2})/;
-  const m = regex.exec(s);
+  const m = /^(\d{1,2}):(\d{2})/.exec(s);
   return m ? `${m[1].padStart(2, '0')}:${m[2]}` : s.slice(0, 5);
 }
+
 function addDays(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
   dt.setUTCDate(dt.getUTCDate() + days);
-  return dt.toISOString().slice(0, 10); 
-}
-/** Genera lista de horas (00:00 a 23:00) */
-function hours(): string[] {
-  const arr: string[] = [];
-  for (let h = 0; h < 24; h++) {
-    arr.push(String(h).padStart(2, '0') + ':00');
-  }
-  return arr;
-}
-function classForStatus(status: CellStatus | undefined | null): string {
-  switch (status) {
-    case 'DISPONIBLE': return 'cell available';
-    case 'PENDIENTE':  return 'cell pending';
-    case 'ACTIVA':     return 'cell pending';  
-    case 'ACEPTADO':   return 'cell accepted';
-    case 'CANCELADO':  return 'cell canceled';
-    case 'VENCIDA':    return 'cell expired';  
-    case 'INCUMPLIDA': return 'cell failed';   
-    default:           return 'cell disabled';
-  }
+  return dt.toISOString().slice(0, 10);
 }
 
-/** Etiquetas legibles. */
-function getStatusLabel(status: CellStatus | undefined | null): string {
-  switch (status) {
-    case 'DISPONIBLE': return 'Disponible';
-    case 'PENDIENTE':
-    case 'ACTIVA':     return 'Pendiente'; 
-    case 'ACEPTADO':   return 'Aceptada';
-    case 'CANCELADO':  return 'Cancelada';
-    case 'VENCIDA':    return 'Vencida';
-    case 'INCUMPLIDA': return 'Incumplida';
-    default:           return '';
-  }
+function hours(): string[] {
+  return Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
 }
-/** Lista de horas (00:00 a 23:00) */
+
 const H_LIST = hours();
-/** Componente de calendario semanal */
+
+function nextSelectableHour(): Date {
+  const now = new Date();
+  now.setSeconds(0, 0);
+  const cut = new Date(now);
+  cut.setMinutes(0, 0, 0);
+  cut.setHours(cut.getHours() + (now.getMinutes() > 0 ? 1 : 0));
+  return cut;
+}
+function slotToLocal(dateISO: string, hhmm: string): Date {
+  const [H, M] = toHHMM(hhmm).split(':').map(Number);
+  const dt = new Date(dateISO + 'T00:00:00');
+  dt.setHours(H, M, 0, 0);
+  return dt;
+}
+function isPastSlot(dateISO: string, hhmm: string): boolean {
+  return slotToLocal(dateISO, toHHMM(hhmm)).getTime() < nextSelectableHour().getTime();
+}
+
+function classForStatus(status: CellStatus | undefined | null): string {
+  const s = (status ?? '').toString().toUpperCase();
+  if (s === 'DISPONIBLE') return 'cell available';
+  if (s === 'PENDIENTE' || s === 'ACTIVA') return 'cell pending';
+  if (s === 'ACEPTADO' || s === 'ACEPTADA') return 'cell accepted';
+  if (s === 'CANCELADO' || s === 'CANCELADA') return 'cell canceled';
+  if (s === 'VENCIDA' || s === 'EXPIRED' || s === 'INCUMPLIDA' || s === 'FINALIZADA') return 'cell expired';
+  return 'cell disabled';
+}
+
+function getStatusLabel(status: CellStatus | undefined | null): string {
+  const s = (status ?? '').toString().toUpperCase();
+  if (s === 'DISPONIBLE') return 'Disponible';
+  if (s === 'PENDIENTE' || s === 'ACTIVA') return 'Pendiente';
+  if (s === 'ACEPTADO' || s === 'ACEPTADA') return 'Aceptada';
+  if (s === 'CANCELADO' || s === 'CANCELADA') return 'Cancelada';
+  if (s === 'VENCIDA' || s === 'EXPIRED') return 'Vencida';
+  if (s === 'INCUMPLIDA') return 'Incumplida';
+  if (s === 'FINALIZADA') return 'Finalizada';
+  return '';
+}
+
 const WeekCalendar: React.FC<WeekCalendarProps> = ({
-  weekStart, cells, mode, selectedKeys, onToggle, onSinglePick, onPrevWeek, onNextWeek, onClear
+  weekStart, cells, mode, selectedKeys, onToggle, onSinglePick,
 }) => {
-  const days = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [weekStart]);
-  // Mapa de celdas
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+
   const map = useMemo(() => {
-    const priority: Record<Exclude<CellStatus, null>, number> = {
-      ACEPTADO: 4,
-      PENDIENTE: 3,
-      ACTIVA: 3,     
-      DISPONIBLE: 2,
-      CANCELADO: 1,
-      VENCIDA: 0,
-      INCUMPLIDA: 0,
-      FINALIZADA: 0
+    const priority: Record<string, number> = {
+      'ACEPTADO': 5, 'ACEPTADA': 5,
+      'PENDIENTE': 4, 'ACTIVA': 4,
+      'DISPONIBLE': 3,
+      'CANCELADO': 2, 'CANCELADA': 2,
+      'INCUMPLIDA': 1, 'FINALIZADA': 1, 'VENCIDA': 1, 'EXPIRED': 1
     };
-    const pr = (s: CellStatus | null | undefined) => (s ? priority[s] ?? 0 : 0);
-    // unificamos por (date,hour) quedándonos con el de mayor prioridad
+    const pr = (s?: string | null) => priority[(s ?? '').toString().toUpperCase()] ?? 0;
     const m = new Map<string, ScheduleCell>();
     for (const c of cells || []) {
       const hhmm = toHHMM(c.hour);
       const key = `${c.date}_${hhmm}`;
       const next = { ...c, hour: hhmm };
       const prev = m.get(key);
-      const pPrev = pr(prev?.status);
-      const pNext = pr(next.status);
-      if (!prev || pNext >= pPrev) m.set(key, next);
+      if (!prev || pr(next.status) >= pr(prev.status)) m.set(key, next);
     }
     return m;
   }, [cells]);
@@ -101,75 +104,30 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
   const mouseDown = useRef(false);
   const paintMode = useRef<'select' | 'deselect' | null>(null);
   const processedInDrag = useRef<Set<string>>(new Set());
-  // Handlers de interacción
+
   const handleDown = (key: string, cell: ScheduleCell) => {
     if (mode !== 'tutor' || !onToggle) return;
     mouseDown.current = true;
     processedInDrag.current = new Set();
-    // Añadimos la celda actual al conjunto de celdas procesadas
-    const isCurrentlySelected = selectedKeys?.has(key) || false;
-    paintMode.current = isCurrentlySelected ? 'deselect' : 'select';
-    // Procesamos la celda actual
+    const isSelected = selectedKeys?.has(key) || false;
+    paintMode.current = isSelected ? 'deselect' : 'select';
     processedInDrag.current.add(key);
     onToggle(key, cell);
   };
-  // Handler para entrar en celda durante arrastre
   const handleEnter = (key: string, cell: ScheduleCell) => {
     if (!mouseDown.current || mode !== 'tutor' || !onToggle) return;
     if (processedInDrag.current.has(key)) return;
-    // Marcamos como procesada
     processedInDrag.current.add(key);
-    const isCurrentlySelected = selectedKeys?.has(key) || false;
-    if ((paintMode.current === 'select' && !isCurrentlySelected) ||
-        (paintMode.current === 'deselect' && isCurrentlySelected)) {
+    const isSelected = selectedKeys?.has(key) || false;
+    if ((paintMode.current === 'select' && !isSelected) ||
+        (paintMode.current === 'deselect' && isSelected)) {
       onToggle(key, cell);
     }
   };
-  // Handler para soltar el ratón
   const handleUp = () => {
     mouseDown.current = false;
     paintMode.current = null;
     processedInDrag.current.clear();
-  };
-
-  const handleClick = (_key: string, cell: ScheduleCell) => {
-    // Solo para modo estudiante, solo se puede elegir DISPONIBLE
-    if (mode === 'student') {
-      const canPick = cell.status === 'DISPONIBLE';
-      if (canPick && onSinglePick) onSinglePick(cell);
-    }
-  };
-  // Renderizado de celda
-  const renderCell = (d: string, h: string) => {
-    const key = `${d}_${h}`;
-    const cell = map.get(key) || { date: d, hour: h, status: null, reservationId: null, studentId: null };
-    const isSelected = !!selectedKeys?.has(key);
-    const canPick = mode === 'student' ? cell.status === 'DISPONIBLE' : true;
-    /** Clase CSS según estado de celda. */
-    const css = [
-      classForStatus(cell.status),
-      isSelected ? 'selected' : '',
-      canPick ? 'can-pick' : 'not-pickable'
-    ].join(' ').trim();
-    // Etiqueta legible
-    const label = getStatusLabel(cell.status);
-
-    return (
-      <button
-        key={key}
-        type="button"
-        className={css}
-        onMouseDown={(e) => { e.preventDefault(); handleDown(key, cell); }}
-        onMouseEnter={() => handleEnter(key, cell)}
-        onMouseUp={handleUp}
-        onClick={() => handleClick(key, cell)}
-        title={`${d} ${h} ${cell.status || ''}`}
-        style={{ cursor: 'pointer', userSelect: 'none' }}
-      >
-        {label && <span>{label}</span>}
-        {label && <span className="dot" />}
-      </button>
-    );
   };
 
   React.useEffect(() => {
@@ -182,9 +140,56 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     };
   }, []);
 
+  const handleClick = (_key: string, cell: ScheduleCell) => {
+    if (mode === 'student') {
+      const canPick = (cell.status ?? '').toString().toUpperCase() === 'DISPONIBLE';
+      if (canPick && onSinglePick) onSinglePick(cell);
+    }
+  };
+
+  const renderCell = (d: string, h: string) => {
+    const key = `${d}_${h}`;
+    const raw = map.get(key) || { date: d, hour: h, status: null } as ScheduleCell;
+
+    let statusForUI = (raw.status ?? null) as CellStatus | null;
+    const sUp = (statusForUI ?? '').toString().toUpperCase();
+    if (isPastSlot(d, h) && (sUp === 'DISPONIBLE' || sUp === 'PENDIENTE' || sUp === 'ACTIVA')) {
+      statusForUI = 'VENCIDA' as CellStatus;
+    }
+
+    const isSelected = !!selectedKeys?.has(key);
+    const canPick = mode === 'student'
+      ? ((statusForUI ?? '').toString().toUpperCase() === 'DISPONIBLE')
+      : true;
+
+    const css = [
+      classForStatus(statusForUI),
+      isSelected ? 'selected' : '',
+      canPick ? 'can-pick' : 'not-pickable',
+    ].join(' ').trim();
+
+    const label = getStatusLabel(statusForUI);
+
+    return (
+      <button
+        key={key}
+        type="button"
+        className={css}
+        onMouseDown={(e) => { e.preventDefault(); handleDown(key, raw); }}
+        onMouseEnter={() => handleEnter(key, raw)}
+        onMouseUp={handleUp}
+        onClick={() => handleClick(key, raw)}
+        title={`${d} ${h} ${statusForUI || ''}`}
+        style={{ cursor: 'pointer', userSelect: 'none' }}
+      >
+        {label && <span>{label}</span>}
+        {label && <span className="dot" />}
+      </button>
+    );
+  };
+
   return (
     <fieldset className="calendar-wrapper" aria-label="Week calendar">
-
       <div className="calendar-grid">
         <div className="col hour-col">
           <div className="head-cell">Hora</div>
@@ -193,7 +198,9 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
 
         {days.map((d, idx) => (
           <div key={d} className="col">
-            <div className="head-cell">{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][idx]}<br />{d}</div>
+            <div className="head-cell">
+              {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][idx]}<br />{d}
+            </div>
             {H_LIST.map(h => renderCell(d, h))}
           </div>
         ))}

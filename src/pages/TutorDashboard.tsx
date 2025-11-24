@@ -10,8 +10,8 @@ import ProfileIncompleteNotification from '../components/ProfileIncompleteNotifi
 import TutorAvailabilityPage from './TutorAvailabilityPage';
 import TutorClassesPage from './TutorClassesPage';
 import TutorStudentsPage from './TutorStudentsPage';
+import TutorMeetingsNowPage from './TutorMeetingsNowPage';
 
-/* Tipos */
 interface User {
   userId: string;
   name: string;
@@ -74,7 +74,6 @@ const TutorDashboard: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'dashboard' | 'my-students' | 'requests' | 'availability' | 'sessions' | 'create-session'>('dashboard');
 
-  /* Datos demo para el dashboard principal */
   const [students] = useState<Student[]>([
     { id: '1', name: 'Ana García',    email: 'ana@student.com',    educationLevel: 'Pregrado',  joinDate: '2025-09-01', status: 'active',   sessionsCompleted: 8 },
     { id: '2', name: 'Carlos Mendoza',email: 'carlos@student.com', educationLevel: 'Secundaria',joinDate: '2025-08-15', status: 'active',   sessionsCompleted: 12 },
@@ -237,13 +236,11 @@ const TutorDashboard: React.FC = () => {
         )}
 
         {activeSection === 'my-students' && <TutorStudentsPage />}
-        
-        {/* --- CAMBIO: La sección 'sessions' ahora muestra la página de clases/solicitudes --- */}
+
         {activeSection === 'sessions' && <TutorClassesPage />}
 
-        {/* --- CAMBIO: La sección 'requests' es ahora el placeholder para 'Mis Clases' --- */}
-        {activeSection === 'requests' && <div className="requests-section"><h1>Mis Clases 🎓</h1><p>(Contenido de clases programadas y completadas)</p></div>}
-        
+        {activeSection === 'requests' && <TutorMeetingsNowPage />}
+
         {activeSection === 'availability' && <TutorAvailabilityPage />}
         {activeSection === 'create-session' && <div className="create-session-section"><h1>Crear Nueva Clase ➕</h1></div>}
       </main>

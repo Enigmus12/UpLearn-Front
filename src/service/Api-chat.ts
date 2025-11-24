@@ -46,7 +46,6 @@ export async function getChatHistory(chatId: string, token: string): Promise<Cha
   return resp.json();
 }
 
-/* ---------- Utilidades ---------- */
 function bufferToHex(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   let hex = '';
@@ -61,7 +60,6 @@ export async function localStableChatId(a: string, b: string): Promise<string> {
   const [min, max] = [a, b].sort((x, y) => x.localeCompare(y));
   const key = `${min}:${max}`;
   try {
-    // WebCrypto (disponible en browsers modernos)
     const enc = new TextEncoder().encode(key);
     const buf = await crypto.subtle.digest('SHA-256', enc);
     return bufferToHex(buf);

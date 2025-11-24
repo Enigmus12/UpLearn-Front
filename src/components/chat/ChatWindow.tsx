@@ -63,7 +63,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ contact, myUserId, token
       try {
         cid = await getChatIdWith(contact.id, token);
       } catch {
-        cid = await localStableChatId(myUserId, contact.id); // idéntico al back
+        cid = await localStableChatId(myUserId, contact.id); 
         console.warn('getChatIdWith falló. Usando chatId local (sha256):', cid);
       }
       if (!mounted) return;

@@ -2,9 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { getTutorReservations, type Reservation } from '../service/Api-scheduler';
 import { ENV } from '../utils/env';
-import '../styles/TutorDashboard.css'; // Reutilizamos los estilos existentes
-
-// --- Interfaces y Tipos ---
+import '../styles/TutorDashboard.css'; 
 
 type PublicProfile = {
   id?: string;
@@ -22,8 +20,6 @@ type StudentWithHistory = {
   status: 'active' | 'inactive';
 };
 
-// --- Funciones de Utilidad ---
-
 function formatTime(timeStr?: string): string {
   if (!timeStr) return '';
   const s = timeStr.trim();
@@ -36,8 +32,6 @@ function formatDate(dateStr?: string): string {
   const d = new Date(dateStr.length === 10 ? `${dateStr}T00:00:00` : dateStr);
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
 }
-
-// --- Componente de Historial Paginado ---
 
 const HISTORY_PAGE_SIZE = 5;
 
@@ -98,8 +92,6 @@ const StudentHistory: React.FC<StudentHistoryProps> = ({ reservations }) => {
   );
 };
 
-// --- Componente Principal ---
-
 const TutorStudentsPage: React.FC = () => {
   const { user, isLoading: authLoading } = useAuth();
   const token = user?.id_token;
@@ -110,7 +102,6 @@ const TutorStudentsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
 
-  // Helpers to reduce nesting and keep sort non-mutating
   const groupReservationsByStudent = (reservations: Reservation[]) => {
     const map: Record<string, Reservation[]> = {};
     for (const res of reservations) {
@@ -170,7 +161,6 @@ const TutorStudentsPage: React.FC = () => {
         const reservationsByStudent = groupReservationsByStudent(reservations);
         const studentIds = Object.keys(reservationsByStudent);
 
-        // if no students, set empty and exit early
         if (studentIds.length === 0) {
           setStudents([]);
           return;
@@ -179,7 +169,6 @@ const TutorStudentsPage: React.FC = () => {
         const profiles = await fetchProfilesForStudentIds(studentIds, token);
         const studentData = buildStudentData(reservationsByStudent, profiles);
 
-        // sort: active first, then by name
         studentData.sort((a, b) => {
           if (a.status === b.status) return a.profile.name!.localeCompare(b.profile.name!);
           return a.status === 'active' ? -1 : 1;

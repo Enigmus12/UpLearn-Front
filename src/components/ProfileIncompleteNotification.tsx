@@ -15,54 +15,40 @@ const ProfileIncompleteNotification: React.FC<ProfileIncompleteNotificationProps
 }) => {
   const navigate = useNavigate();
 
-  console.log('🔔 ProfileIncompleteNotification: Renderizando con:', {
-    missingFields,
-    currentRole,
-    hasMissingFields: missingFields && missingFields.length > 0
-  });
-
   const handleCompleteProfile = () => {
     navigate('/edit-profile', { state: { currentRole } });
   };
 
-  const fieldLabels: Record<string, string> = {
-    name: 'Nombre',
-    email: 'Email',
-    phoneNumber: 'Teléfono',
-    idType: 'Tipo de Identificación',
-    idNumber: 'Número de Identificación',
-    educationLevel: 'Nivel Educativo',
-    bio: 'Biografía',
-    specializations: 'Especializaciones',
-    credentials: 'Credenciales'
-  };
-
   return (
-    <div className="profile-incomplete-notification">
+    <section className="profile-incomplete-notification" aria-label="Aviso de perfil incompleto" aria-live="polite">
+      {onDismiss && (
+        <button
+          type="button"
+          className="btn-dismiss btn-dismiss-floating"
+          aria-label="Cerrar aviso de perfil incompleto"
+          onClick={onDismiss}
+        >
+          ×
+        </button>
+      )}
+
       <div className="notification-content">
         <div className="notification-text">
           <h3>Perfil Incompleto</h3>
           <p>Por favor completa tu perfil para aprovechar todas las funcionalidades.</p>
         </div>
+
         <div className="notification-actions">
-                      {onDismiss && (
-            <button 
-              className="btn-dismiss"
-              onClick={onDismiss}
-              title="Recordar más tarde"
-            >
-              ✕
-            </button>
-          )}
-          <button 
+          <button
             className="btn-complete-profile"
             onClick={handleCompleteProfile}
+            type="button"
           >
             Completar Perfil
           </button>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
 

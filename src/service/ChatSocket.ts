@@ -37,7 +37,7 @@ export class ChatSocket {
 
     // Si hay una conexión abierta a otra URL, ciérrala con cortesía
     if (this.ws && this.ws.readyState === WebSocket.OPEN && this.lastUrl !== url) {
-      try { this.ws.close(1000, 'switch transport'); } catch {}
+      try { this.ws.close(1000, 'switch transport'); } catch { }
     }
 
     this.ws = new WebSocket(url);
@@ -52,7 +52,7 @@ export class ChatSocket {
       this.wasEverOpen = true;
       if (this.cancelled) {
         // Si nos “cancelaron” durante CONNECTING, cerrar inmediatamente y sin logs
-        try { this.ws?.close(1000, 'cancelled before open'); } catch {}
+        try { this.ws?.close(1000, 'cancelled before open'); } catch { }
         return;
       }
 
@@ -61,14 +61,14 @@ export class ChatSocket {
       // Enviar pendientes
       if (this.outbox.length) {
         for (const p of this.outbox) {
-          try { this.ws?.send(p); } catch {}
+          try { this.ws?.send(p); } catch { }
         }
         this.outbox = [];
       }
 
       // Keep-alive para proxies/firewalls
       this.keepAliveTimer = setInterval(() => {
-        try { this.ws?.send(JSON.stringify({ type: 'ping', ts: Date.now() })); } catch {}
+        try { this.ws?.send(JSON.stringify({ type: 'ping', ts: Date.now() })); } catch { }
       }, 25000);
     };
 
@@ -80,7 +80,9 @@ export class ChatSocket {
       if (!this.suppressClose) this.onStateCb?.('closed');
       if (this.keepAliveTimer) {
         clearInterval(this.keepAliveTimer);
-        this.keepAliveTimer = null;
+        this.keepAliveTimer = setInterval(() => {
+          try { this.ws?.send('ping'); } catch { }
+        }, 25000);
       }
       this.ws = null;
       this.lastUrl = null;
@@ -112,11 +114,11 @@ export class ChatSocket {
     if (!this.ws) return;
 
     if (this.ws.readyState === WebSocket.CONNECTING) {
-      this.suppressClose = true;         
+      this.suppressClose = true;
       this.ws.onmessage = null;
       this.ws.onerror = null;
       const ws = this.ws;
-      ws.onopen = () => { try { ws.close(1000, 'cancelled on open'); } catch {} };
+      ws.onopen = () => { try { ws.close(1000, 'cancelled on open'); } catch { } };
       this.ws = null;
       this.lastUrl = null;
       this.outbox = [];
@@ -124,11 +126,11 @@ export class ChatSocket {
     }
 
     try {
-      this.suppressClose = !this.wasEverOpen; 
+      this.suppressClose = !this.wasEverOpen;
       if (this.ws.readyState !== WebSocket.CLOSED) {
         this.ws.close(1000, 'client closing');
       }
-    } catch {}
+    } catch { }
 
     this.ws = null;
     this.lastUrl = null;

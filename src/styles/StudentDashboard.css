@@ -25,9 +25,11 @@
 
 /* Header */
 .dashboard-container .dashboard-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.72)), linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background-color: #4f46e5; 
+  background-blend-mode: overlay, normal;
   color: white !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -58,7 +60,7 @@
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: white !important;
+  color: inherit;
 }
 
 .main-nav {
@@ -71,7 +73,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.1);
   border: none;
   border-radius: 8px;
   color: white !important;
@@ -83,12 +85,12 @@
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
   transform: translateY(-1px);
 }
 
 .nav-item.active {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.25);
   font-weight: 600;
 }
 
@@ -106,7 +108,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.1);
   border: none;
   border-radius: 25px;
   color: white !important;
@@ -724,7 +726,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #5a55e2 0%, #693a92 100%);
   color: white;
 }
 
@@ -735,7 +737,7 @@
 
 .btn-secondary {
   background: #f3f4f6;
-  color: #374151;
+  color: #1f2937;
   border: 1px solid #d1d5db;
 }
 
@@ -864,29 +866,6 @@
     background: #fff;
     transition: transform .06s ease, box-shadow .15s ease;
   }
-
-  .cell.taken {
-    background: #F3F4F6;
-  }
-
-  .cell.available {
-    background: var(--u-green-100);
-    box-shadow: inset 0 0 0 1px rgba(6, 95, 70, .25);
-  }
-
-  .cell.available.can-pick {
-    cursor: pointer;
-  }
-
-  .cell.available.can-pick:hover {
-    background: var(--u-green-200);
-  }
-
-  .cell.selected {
-    background: var(--u-green-050);
-    box-shadow: inset 0 0 0 2px var(--u-green), 0 0 0 2px rgba(6, 95, 70, .05);
-  }
-
   .week-nav {
     display: flex;
     align-items: center;
@@ -955,7 +934,7 @@
     margin: 20px auto;
     padding: 18px;
     border-radius: 16px;
-    background: linear-gradient(135deg, #6d6ae8 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, #4f46e5 0%, #693a92 100%);
     color: #fff;
     box-shadow: 0 10px 24px rgba(124, 58, 237, .18);
     border: 0;
@@ -1091,7 +1070,7 @@
 }
 
 .btn-ghost{
-  color: #fff !important;
+  color: #1f2937 !important;
   background: transparent;
   border: 1px solid rgba(255,255,255,.25);
 }
@@ -1182,3 +1161,68 @@ button[style*="pink"],
   color: #fff !important;
 }
 
+/* Estados deshabilitados (gris) para todos los botones */
+button:disabled,
+.btn:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-success:disabled,
+.btn-danger:disabled,
+.btn-action:disabled,
+.btn-ghost:disabled {
+  background: #9ca3af !important;   /* gris */
+  color: #e5e7eb !important;
+  border-color: #9ca3af !important;
+  cursor: not-allowed !important;
+  opacity: .65 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Evitar hover distinto cuando está deshabilitado */
+.btn-primary:disabled:hover,
+.btn-secondary:disabled:hover,
+.btn-success:disabled:hover,
+.btn-danger:disabled:hover,
+.btn-action:disabled:hover,
+.btn-ghost:disabled:hover,
+button:disabled:hover {
+  background: #9ca3af !important;
+  border-color: #9ca3af !important;
+  filter: none !important;
+  transform: none !important;
+}
+/* Tarjetas clicables del dashboard */
+.stat-card--action {
+  cursor: pointer;
+  user-select: none;
+}
+.stat-card--action:focus-visible {
+  outline: 3px solid #6366f1;
+  outline-offset: 3px;
+}
+.stat-card--action:active {
+  transform: translateY(0); /* evita saltos al hacer click */
+}
+/* Hace que el botón cubra toda la tarjeta y se vea como tarjeta */
+.stat-card__button {
+  /* no usar all: unset para no romper herencias globales */
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-start;
+  cursor: pointer;
+  /* hereda padding/border-radius/sombra desde .stat-card contenedor */
+}
+
+.stat-card__button:focus-visible {
+  outline: 3px solid #6366f1;
+  outline-offset: 3px;
+  border-radius: 12px;
+}

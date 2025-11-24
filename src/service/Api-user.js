@@ -588,7 +588,9 @@ class ApiUserService {
     }
 
     const formData = new FormData();
-    files.forEach(f => formData.append('files', f));
+    for (const f of files) {
+      formData.append('files', f);
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/tutor/credentials`, {

@@ -24,8 +24,8 @@ function toISODateLocal(d: Date): string {
 }
 function mondayOf(dateIso: string): string {
   const d = parseISODateLocal(dateIso);
-  const day = d.getDay(); // 0=Dom,1=Lun,...,6=Sab
-  const diffFromMonday = (day + 6) % 7; // Lun->0, Mar->1, ..., Dom->6
+  const day = d.getDay(); 
+  const diffFromMonday = (day + 6) % 7; 
   d.setDate(d.getDate() - diffFromMonday);
   return toISODateLocal(d);
 }
@@ -112,8 +112,15 @@ const BookTutorPage: React.FC = () => {
   const [selectedCell, setSelectedCell] = useState<ScheduleCell | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Banner
   const [banner, setBanner] = useState<Banner>(null);
+
+  // Referencia de tiempo actual para filtrar el pasado
+  const [now, setNow] = useState(new Date());
+  
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const currentUser = useMemo(
     () => ({
@@ -142,7 +149,6 @@ const BookTutorPage: React.FC = () => {
     [profile, tutorId]
   );
 
-  // Cargar disponibilidad/semanas con weekStart anclado a LUNES 
   useEffect(() => {
     const loadWeek = async () => {
       if (!token || !effectiveTutorId) return;
@@ -153,7 +159,6 @@ const BookTutorPage: React.FC = () => {
         const data = await getScheduleForTutor(effectiveTutorId, weekStart, token);
         setScheduleCells(data);
       } catch {
-        // fallback público si no hay endpoint privado
         const data = await getPublicAvailabilityForTutor(effectiveTutorId, weekStart, token);
         setScheduleCells(data);
       } finally {
@@ -195,7 +200,6 @@ const BookTutorPage: React.FC = () => {
     }
   };
 
-  // Icono del banner extraído a una declaración independiente 
   let bannerIcon = '';
   if (banner) {
     if (banner.type === 'success') {
@@ -215,10 +219,8 @@ const BookTutorPage: React.FC = () => {
     <div className="dashboard-container">
       <AppHeader currentUser={currentUser} onSectionChange={handleSectionChange} />
 
-      {/* Contenido principal */}
       <main className="dashboard-main">
         <div style={{ padding: 16, maxWidth: 1100, margin: '0 auto' }}>
-          {/* Banner de mensajes */}
           {banner && (
             <div style={bannerStyle(banner.type)}>
               <span aria-hidden>
@@ -228,7 +230,6 @@ const BookTutorPage: React.FC = () => {
             </div>
           )}
 
-          {/* Tarjeta compacta del tutor */}
           <section className="card compact-profile">
             <div className="compact-profile__left">
               <div className="avatar-bubble">👨‍🏫</div>
@@ -274,7 +275,6 @@ const BookTutorPage: React.FC = () => {
             </div>
           </section>
 
-          {/* Resumen acciones */}
           <section className="card action-strip">
             <div className="action-strip__left">
               {selectedCell
@@ -289,7 +289,6 @@ const BookTutorPage: React.FC = () => {
             </div>
           </section>
 
-          {/* Navegación de semana */}
           <section className="card week-nav week-nav--highlight">
             <button className="btn btn-ghost" onClick={() => setWeekStart(addDays(weekStart, -7))}>
               ◀ Semana anterior
@@ -302,7 +301,6 @@ const BookTutorPage: React.FC = () => {
             </button>
           </section>
 
-          {/* Calendario */}
           <section className="calendar-container card" style={{ padding: 12 }}>
             {loading ? (
               <div style={{ padding: 20 }}>Cargando disponibilidad...</div>
@@ -327,12 +325,19 @@ const BookTutorPage: React.FC = () => {
                         const c = scheduleCells.find(k => k.date === date && k.hour === h);
                         const st = ((c?.status ?? '') as string).toUpperCase();
 
-                        const pickable = st === 'DISPONIBLE' || st === 'AVAILABLE';
+
+                        const cellDate = new Date(`${date}T${h}`);
+                        const isPast = cellDate < now;
+
+                        const pickable = !isPast && (st === 'DISPONIBLE' || st === 'AVAILABLE');
+                        
                         const isSelected = selectedCell?.date === date && selectedCell?.hour === h;
                         const key = `${date}_${h}`;
 
                         let statusClass = 'disabled';
-                        if (st) statusClass = pickable ? 'available' : 'taken';
+                        if (!isPast && st) {
+                            statusClass = pickable ? 'available' : 'taken';
+                        }
 
                         let ariaLabel = `No disponible ${h} ${date}`;
                         if (pickable) ariaLabel = `Disponible ${h} ${date}`;
