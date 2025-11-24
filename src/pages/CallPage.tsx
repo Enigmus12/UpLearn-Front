@@ -5,7 +5,7 @@ import CallControls from '../components/llamada/CallControls';
 import { getIceServers } from '../service/Api-call';
 import '../styles/CallPage.css';
 
-// --- Tipos y Utilidades ---
+// Tipos y Utilidades 
 type Envelope = {
   type: string;
   sessionId: string;
@@ -16,7 +16,7 @@ type Envelope = {
   ts: number;
   traceId: string;
 };
-// Generador simple de ULID para trazabilidad
+
 function ulid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
@@ -45,11 +45,11 @@ export default function CallPage() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Elementos de Video 
+  // Elementos de Video
   const localVideo = useRef<HTMLVideoElement>(null);
   const remoteVideo = useRef<HTMLVideoElement>(null);
 
-  // Streams 
+  // Streams
   const camStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
@@ -58,7 +58,7 @@ export default function CallPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState<boolean>(false);
 
-  // Colas y Flags Internos 
+  // Colas y Flags Internos ---
   const iceCandidatesQueue = useRef<RTCIceCandidate[]>([]);
   const wsOpenRef = useRef(false);
   const joinAckRef = useRef(false);
@@ -73,9 +73,10 @@ export default function CallPage() {
     hasLocalMedia: 'no',
     lastMsg: '' as string,
   });
+
   const updateDebug = (patch: Partial<typeof debug>) =>
     setDebug((d) => ({ ...d, ...patch }));
-  
+
   const safeLog = (...args: any[]) => console.log('[CALL]', ...args);
   const safeWarn = (...args: any[]) => console.warn('[CALL]', ...args);
   const safeErr = (...args: any[]) => console.error('[CALL]', ...args);
@@ -99,7 +100,7 @@ export default function CallPage() {
     wsInstance.send(JSON.stringify(payload));
   };
 
-  // Lógica de Negociación (Offer) 
+  // Lógica de Negociación (Offer)
   const maybeStartOffer = async () => {
     const pc = pcRef.current;
     if (!pc || sentOfferRef.current) {
@@ -130,7 +131,7 @@ export default function CallPage() {
     await maybeStartOffer();
   };
 
-  // Inicialización 
+  // Efecto Principal: Inicialización
   useEffect(() => {
     safeLog('MOUNT CallPage', { sessionId, reservationId, hasToken: !!token, userId });
     updateDebug({ lastMsg: 'mount', hasLocalMedia: 'no' });
@@ -146,8 +147,7 @@ export default function CallPage() {
     }
 
     let isMounted = true;
-    
-    // Crear RTCPeerConnection
+
     const init = async () => {
       try {
         setConnState('Obteniendo servidores...');
@@ -161,17 +161,17 @@ export default function CallPage() {
         });
         pcRef.current = pcLocal;
 
+        // Media Local
         setConnState('Accediendo a dispositivos...');
         safeLog('Solicitando getUserMedia…');
         const camStream: MediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         camStreamRef.current = camStream;
         
         if (localVideo.current) localVideo.current.srcObject = camStream;
-        for (const track of camStream.getTracks()) {
-          pcLocal.addTrack(track, camStream);
-        }
+        camStream.getTracks().forEach((track: MediaStreamTrack) => pcLocal.addTrack(track, camStream));
         updateDebug({ hasLocalMedia: 'sí' });
 
+        // Eventos RTC
         pcLocal.ontrack = (ev) => {
           safeLog('ontrack: stream remoto recibido');
           if (remoteVideo.current) remoteVideo.current.srcObject = ev.streams[0];
@@ -197,10 +197,10 @@ export default function CallPage() {
         };
 
         // WebSocket
-        const envHost = (import.meta as any)?.env?.VITE_CALLS_HOST || (globalThis as any).__CALLS_HOST__;
-        const defaultHost = `${(globalThis as any).location.hostname}:8093`;
+        const envHost = (import.meta as any)?.env?.VITE_CALLS_HOST || (window as any).__CALLS_HOST__;
+        const defaultHost = `${window.location.hostname}:8093`;
         const host = envHost || defaultHost;
-        const scheme = (globalThis as any).location.protocol === 'https:' ? 'wss' : 'ws';
+        const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
         const wsBase = host.startsWith('http') ? new URL(host).host : host;
         const wsUrl = `${scheme}://${wsBase}/ws/call?token=${encodeURIComponent(token)}`;
 
@@ -216,76 +216,7 @@ export default function CallPage() {
           send(ws, { type: 'JOIN' });
         };
 
-        // Manejadores de Mensajes WS
-        const handleOffer = async (m: Envelope) => {
-          // Manejo de Glare simple
-          if (pcLocal.signalingState === 'stable') {
-            await pcLocal.setRemoteDescription(m.payload as RTCSessionDescriptionInit);
-          } else {
-            // Aplicar rollback y luego establecer la descripción remota
-            await Promise.all([
-              pcLocal.setLocalDescription({ type: 'rollback' } as any),
-              pcLocal.setRemoteDescription(m.payload as RTCSessionDescriptionInit),
-            ]);
-          }
-          gotRemoteDescRef.current = true;
-
-          // Procesar cola ICE
-          while (iceCandidatesQueue.current.length > 0) {
-            await pcLocal.addIceCandidate(iceCandidatesQueue.current.shift());
-          }
-          // Crear y enviar ANSWER
-          const answer = await pcLocal.createAnswer();
-          await pcLocal.setLocalDescription(answer);
-          send(ws, { type: 'ANSWER', payload: answer });
-        };
-        
-        const handleAnswer = async (m: Envelope) => {
-          await pcLocal.setRemoteDescription(m.payload as RTCSessionDescriptionInit);
-          gotRemoteDescRef.current = true;
-          while (iceCandidatesQueue.current.length > 0) {
-            await pcLocal.addIceCandidate(iceCandidatesQueue.current.shift());
-          }
-        };
-        
-        const handleIceCandidate = async (m: Envelope) => {
-          const candidate = new RTCIceCandidate(m.payload);
-          if (pcLocal.remoteDescription) {
-            await pcLocal.addIceCandidate(candidate);
-          } else {
-            iceCandidatesQueue.current.push(candidate);
-          }
-        };
-
-        const handleEnd = (m: Envelope) => {
-          ws.close();
-          navigate(-1);
-        };
-
-        const processWsMessage = async (msg: Envelope) => {
-          try {
-            switch (msg.type) {
-              case 'OFFER':
-                await handleOffer(msg);
-                break;
-              case 'ANSWER':
-                await handleAnswer(msg);
-                break;
-              case 'ICE_CANDIDATE':
-                await handleIceCandidate(msg);
-                break;
-              case 'END':
-                handleEnd(msg);
-                break;
-              default:
-                break;
-            }
-          } catch (err) {
-            safeErr('Error manejando WS message', err);
-          }
-        };
-        
-        ws.onmessage = (e) => {
+        ws.onmessage = async (e) => {
           if (!isMounted) return;
           updateDebug({ lastMsg: 'ws-message' });
           const msg: Envelope = JSON.parse(e.data);
@@ -298,15 +229,57 @@ export default function CallPage() {
 
           if (msg.type === 'JOIN_ACK') {
             joinAckRef.current = true;
-            setTimeout(startOffer, 300);
-            
-            void maybeStartOffer();
+            setTimeout(() => startOffer(), 300);
+            await maybeStartOffer();
             return;
           }
 
-          if (msg.from === userId) return; // Ignorar mensajes propios
+          if (msg.from === userId) return; 
 
-          void processWsMessage(msg);
+          try {
+            if (msg.type === 'OFFER') {
+              // Manejo de Glare simple
+              if (pcLocal.signalingState !== 'stable') {
+                await Promise.all([
+                  pcLocal.setLocalDescription({ type: 'rollback' } as any),
+                  pcLocal.setRemoteDescription(msg.payload as RTCSessionDescriptionInit),
+                ]);
+              } else {
+                await pcLocal.setRemoteDescription(msg.payload as RTCSessionDescriptionInit);
+              }
+              gotRemoteDescRef.current = true;
+              
+              // Procesar cola ICE
+              while (iceCandidatesQueue.current.length > 0) {
+                await pcLocal.addIceCandidate(iceCandidatesQueue.current.shift()!);
+              }
+              
+              const answer = await pcLocal.createAnswer();
+              await pcLocal.setLocalDescription(answer);
+              send(ws, { type: 'ANSWER', payload: answer });
+            } 
+            else if (msg.type === 'ANSWER') {
+              await pcLocal.setRemoteDescription(msg.payload as RTCSessionDescriptionInit);
+              gotRemoteDescRef.current = true;
+              while (iceCandidatesQueue.current.length > 0) {
+                await pcLocal.addIceCandidate(iceCandidatesQueue.current.shift()!);
+              }
+            } 
+            else if (msg.type === 'ICE_CANDIDATE') {
+              const candidate = new RTCIceCandidate(msg.payload);
+              if (pcLocal.remoteDescription) {
+                await pcLocal.addIceCandidate(candidate);
+              } else {
+                iceCandidatesQueue.current.push(candidate);
+              }
+            } 
+            else if (msg.type === 'END') {
+              ws.close();
+              navigate(-1);
+            }
+          } catch (err) {
+            safeErr('Error manejando WS message', err);
+          }
         };
 
         ws.onerror = (ev) => {
@@ -339,12 +312,7 @@ export default function CallPage() {
       try { wsRef.current?.close(); } catch { }
       try { pcRef.current?.close(); } catch { }
       
-      const stopAll = (s: MediaStream | null) => {
-        if (!s) return;
-        for (const trk of s.getTracks()) {
-          trk.stop();
-        }
-      };
+      const stopAll = (s: MediaStream | null) => s?.getTracks().forEach((trk) => trk.stop());
       stopAll(screenStreamRef.current);
       stopAll(camStreamRef.current);
       
@@ -378,11 +346,7 @@ export default function CallPage() {
       await sender.replaceTrack(camTrack);
       if (localVideo.current && camStream) localVideo.current.srcObject = camStream;
     }
-    if (screenStream) {
-      for (const t of screenStream.getTracks()) {
-        t.stop();
-      }
-    }
+    screenStream?.getTracks().forEach(t => t.stop());
     screenStreamRef.current = null;
     setIsSharing(false);
   };
@@ -391,7 +355,7 @@ export default function CallPage() {
     const pc = pcRef.current;
     if (!pc) return;
     if (isSharing) return stopScreenShare();
-    // Iniciar Screen Share
+
     try {
       const displayStream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -402,11 +366,7 @@ export default function CallPage() {
 
       const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
       if (sender) await sender.replaceTrack(screenTrack);
-      else {
-        for (const t of displayStream.getTracks()) {
-          pc.addTrack(t, displayStream);
-        }
-      }
+      else displayStream.getTracks().forEach(t => pc.addTrack(t, displayStream));
 
       if (localVideo.current) localVideo.current.srcObject = displayStream;
       screenStreamRef.current = displayStream;
@@ -420,7 +380,7 @@ export default function CallPage() {
 
   const onEnd = () => navigate(-1);
 
-  // Renderizado
+  // Render
 
   if (auth.isLoading) return <div className="call-loading">Cargando autenticación...</div>;
   
@@ -455,14 +415,10 @@ export default function CallPage() {
 
       <div className="video-grid">
         <div className="remote-video-wrapper">
-          <video ref={remoteVideo} autoPlay playsInline className="remote-video">
-            <track kind="captions" src="" srcLang="en" label="English" default />
-          </video>
-        <div className="local-video-wrapper">
-          <video ref={localVideo} autoPlay muted playsInline className="local-video">
-            <track kind="captions" src="" srcLang="en" label="English" default />
-          </video>
+          <video ref={remoteVideo} autoPlay playsInline className="remote-video" />
         </div>
+        
+        <div className="local-video-wrapper">
           <video ref={localVideo} autoPlay muted playsInline className="local-video" />
         </div>
       </div>
