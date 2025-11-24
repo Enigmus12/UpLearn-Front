@@ -492,15 +492,7 @@ const TutorClassesPage: React.FC = () => {
                         title={canCancel ? 'Cancelar esta reserva' : 'No se puede cancelar en este estado'}
                       >
                         ✗ Cancelar
-                      </button>
-                      <button
-                        className="btn-action btn-contact"
-                        onClick={() => handleContact(group.studentId, group.studentName, group.studentAvatar)}
-                        disabled={!canContact}
-                        title={canContact ? 'Contactar' : 'Solo con reservas ACEPTADAS o INCUMPLIDAS'}
-                      >
-                        ● Contactar
-                      </button>
+                      </button> 
                     </div>
                   </div>
                 );

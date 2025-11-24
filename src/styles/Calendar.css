@@ -66,7 +66,6 @@
   height: 38px;
   border: 1px solid var(--u-border);
   border-radius: 6px;
-  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -75,53 +74,49 @@
   position: relative;
   font-size: 10px;
   font-weight: 600;
-  color: #111827;
+  color: #0f172a;
   text-transform: uppercase;
   letter-spacing: 0.2px;
 }
 
-/* Estados base */
 .cell.available {
   background: #059669;
   border-color: #059669;
   box-shadow: inset 0 0 0 1px rgba(5, 150, 105, 0.4);
-  color: #000000;
+  color: #ffffff;
 }
 
-/* Naranja para PENDIENTE (y legacy ACTIVA) */
 .cell.pending {
   background: #F59E0B;
   border-color: #D97706;
   box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.4);
-  color: #000000;
+  color: #ffffff;
 }
 
-/* Mantener .active por si algo lo usa aún  */
 .cell.active {
   background: #F59E0B;
   border-color: #D97706;
   box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.4);
-  color: #000000;
+  color: #ffffff;
 }
 
 .cell.accepted {
   background: #3B82F6;
   border-color: #2563EB;
-  color: #000000;
+  color: #ffffff;
 }
 
 .cell.canceled {
   background: #EF4444;
   border-color: #DC2626;
-  color: #111827;
+  color: #ffffff;
 }
 
-/* Rosa para VENCIDA */
 .cell.expired {
   background: #EC4899;
   border-color: #DB2777;
   box-shadow: inset 0 0 0 1px rgba(219, 39, 119, 0.35);
-  color: #111827;
+  color: #ffffff;
 }
 
 .cell.disabled {
@@ -138,14 +133,12 @@
   cursor: not-allowed;
 }
 
-/* Hover para celdas disponibles */
 .cell.available.can-pick:hover {
   background: #059669;
   transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
 
-/* Selección */
 .cell.selected {
   outline: 3px solid #6B46C1;
   box-shadow: inset 0 0 0 2px #c146c166, 0 0 0 4px rgba(107, 70, 193, 0.15);
@@ -208,7 +201,6 @@
   background: #F3F4F6;
 }
 
-/* Navegación de semana con gradiente azul/morado como el menú */
 .week-nav {
   display: flex;
   align-items: center;
@@ -216,13 +208,11 @@
   gap: 12px;
   padding: 12px 16px !important;
   border-radius: 12px;
-  /* Gradiente azul a morado como el menú de navegación */
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
 }
 
-/* Botones ghost dentro de la barra de navegación */
 .week-nav .btn-ghost {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.15);
@@ -242,7 +232,6 @@
   color: #ffffff;
 }
 
-/* Botones estilo moderno */
 .action-buttons {
   display: flex;
   gap: 10px;
@@ -296,11 +285,11 @@
   box-shadow: none;
 }
 
-/* Botón fantasma para navegación de semana */
 .btn-ghost {
-  background: rgba(255, 255, 255, .15);
-  border: 1px solid rgba(255, 255, 255, .3);
-  color: #ffffff;
+/* Botón fantasma para navegación de semana */
+  background: rgba(255, 255, 255, .95);
+  border: 1px solid rgba(0, 0, 0, .08);
+  color: #111827;
   padding: 8px 16px;
   border-radius: 8px;
   font-weight: 600;
@@ -311,8 +300,8 @@
 }
 
 .btn-ghost:hover {
-  background: rgba(255, 255, 255, .25);
-  border-color: rgba(255, 255, 255, .4);
+  background: rgba(255, 255, 255, .98);
+  border-color: rgba(0, 0, 0, .12);
   transform: translateY(-1px);
 }
 
@@ -321,12 +310,9 @@
 }
 
 .btn-ghost:focus-visible {
-  outline: 2px solid #ffffff;
+  outline: 2px solid #111827;
   outline-offset: 2px;
-}
 
-/* Panel azul tipo primary */
-.card--primary-soft {
   max-width: 900px;
   margin: 20px auto;
   padding: 18px;
@@ -337,7 +323,6 @@
   border: 0;
 }
 
-/* Barra de semana */
 .week-toolbar {
   display: flex;
   align-items: center;
@@ -353,13 +338,11 @@
   flex: 1;
 }
 
-/* Lista de reservas */
 .reservations-list {
   display: grid;
   gap: 12px;
 }
 
-/* Tarjeta de reserva con hover highlight */
 .reservation-card {
   background: #fff;
   color: #111827;
@@ -401,7 +384,6 @@
   margin-top: 12px;
 }
 
-/* Píldora de estado */
 .status-pill {
   display: inline-block;
   padding: 4px 10px;
@@ -411,7 +393,6 @@
   line-height: 1;
 }
 
-/* Nota vacía */
 .empty-note {
   background: rgba(255, 255, 255, .25);
   border: 1px dashed rgba(255, 255, 255, .5);
@@ -421,7 +402,6 @@
   text-align: center;
 }
 
-/* Mensaje de instrucciones */
 .instruction-text {
   text-align: center;
   color: #6B7280;

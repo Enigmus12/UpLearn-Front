@@ -1,3 +1,4 @@
+// src/pages/TutorDashboard.tsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
@@ -10,6 +11,7 @@ import ProfileIncompleteNotification from '../components/ProfileIncompleteNotifi
 import TutorAvailabilityPage from './TutorAvailabilityPage';
 import TutorClassesPage from './TutorClassesPage';
 import TutorStudentsPage from './TutorStudentsPage';
+import TutorMeetingsNowPage from './TutorMeetingsNowPage'; // <-- NUEVO
 
 /* Tipos */
 interface User {
@@ -237,13 +239,13 @@ const TutorDashboard: React.FC = () => {
         )}
 
         {activeSection === 'my-students' && <TutorStudentsPage />}
-        
-        {/* --- CAMBIO: La sección 'sessions' ahora muestra la página de clases/solicitudes --- */}
+
+        {/* Solicitudes (aceptar/cancelar) */}
         {activeSection === 'sessions' && <TutorClassesPage />}
 
-        {/* --- CAMBIO: La sección 'requests' es ahora el placeholder para 'Mis Clases' --- */}
-        {activeSection === 'requests' && <div className="requests-section"><h1>Mis Clases 🎓</h1><p>(Contenido de clases programadas y completadas)</p></div>}
-        
+        {/* Mis Clases → vista nueva con “Reunirse ahora” y “Contactar” */}
+        {activeSection === 'requests' && <TutorMeetingsNowPage />}
+
         {activeSection === 'availability' && <TutorAvailabilityPage />}
         {activeSection === 'create-session' && <div className="create-session-section"><h1>Crear Nueva Clase ➕</h1></div>}
       </main>

@@ -115,6 +115,15 @@ const BookTutorPage: React.FC = () => {
   // Banner
   const [banner, setBanner] = useState<Banner>(null);
 
+  // Referencia de tiempo actual para filtrar el pasado
+  const [now, setNow] = useState(new Date());
+  
+  // Actualizar "now" cada minuto para mantener la UI fresca si el usuario deja la pagina abierta
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   const currentUser = useMemo(
     () => ({
       userId: auth.user?.profile?.sub || 'unknown',
@@ -142,7 +151,6 @@ const BookTutorPage: React.FC = () => {
     [profile, tutorId]
   );
 
-  // Cargar disponibilidad/semanas con weekStart anclado a LUNES 
   useEffect(() => {
     const loadWeek = async () => {
       if (!token || !effectiveTutorId) return;
@@ -195,7 +203,6 @@ const BookTutorPage: React.FC = () => {
     }
   };
 
-  // Icono del banner extraído a una declaración independiente 
   let bannerIcon = '';
   if (banner) {
     if (banner.type === 'success') {
@@ -327,12 +334,19 @@ const BookTutorPage: React.FC = () => {
                         const c = scheduleCells.find(k => k.date === date && k.hour === h);
                         const st = ((c?.status ?? '') as string).toUpperCase();
 
-                        const pickable = st === 'DISPONIBLE' || st === 'AVAILABLE';
+
+                        const cellDate = new Date(`${date}T${h}`);
+                        const isPast = cellDate < now;
+
+                        const pickable = !isPast && (st === 'DISPONIBLE' || st === 'AVAILABLE');
+                        
                         const isSelected = selectedCell?.date === date && selectedCell?.hour === h;
                         const key = `${date}_${h}`;
 
                         let statusClass = 'disabled';
-                        if (st) statusClass = pickable ? 'available' : 'taken';
+                        if (!isPast && st) {
+                            statusClass = pickable ? 'available' : 'taken';
+                        }
 
                         let ariaLabel = `No disponible ${h} ${date}`;
                         if (pickable) ariaLabel = `Disponible ${h} ${date}`;
