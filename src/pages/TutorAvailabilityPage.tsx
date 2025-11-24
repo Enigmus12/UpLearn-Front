@@ -1,4 +1,3 @@
-// src/pages/TutorAvailabilityPage.tsx
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from 'react-oidc-context';
 import WeekCalendar from '../components/WeekCalendar';
@@ -32,11 +31,9 @@ const toHHMM = (h: string) => {
   return m ? `${m[1].padStart(2, '0')}:${m[2]}` : s.slice(0, 5);
 };
 
-// a partir de la siguiente hora 
 function nextSelectableHour(): Date {
   const now = new Date();
   now.setSeconds(0, 0);
-  // redondear hacia arriba a la siguiente hora entera
   const cutoff = new Date(now);
   cutoff.setMinutes(0, 0, 0);
   cutoff.setHours(cutoff.getHours() + (now.getMinutes() > 0 ? 1 : 0));
@@ -44,7 +41,7 @@ function nextSelectableHour(): Date {
 }
 function cellDateTimeLocal(dateISO: string, hhmm: string): Date {
   const [H, M] = hhmm.split(':').map(Number);
-  const dt = new Date(dateISO + 'T00:00:00'); // local
+  const dt = new Date(dateISO + 'T00:00:00'); 
   dt.setHours(H, M, 0, 0);
   return dt;
 }
@@ -59,7 +56,6 @@ const TutorAvailabilityPage: React.FC = () => {
   const auth = useAuth();
   const token = (auth.user as any)?.id_token ?? auth.user?.access_token;
   const tutorId = auth.user?.profile?.sub || '';
-  // estados
   const [weekStart, setWeekStart] = useState(() =>
     mondayOf(new Date().toISOString().slice(0, 10))
   );
@@ -69,7 +65,6 @@ const TutorAvailabilityPage: React.FC = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<OperationMode>('add');
 
-  // Recarga
   const load = useCallback(async () => {
     if (!tutorId || !token) return;
     setLoading(true);
@@ -88,7 +83,6 @@ const TutorAvailabilityPage: React.FC = () => {
     load();
   }, [load]);
 
-  // mapa para consultar estado por clave
   const cellByKey = useMemo(() => {
     const m = new Map<string, ScheduleCell>();
     for (const c of cells) {
@@ -111,18 +105,15 @@ const TutorAvailabilityPage: React.FC = () => {
     }
 
     const c = cellByKey.get(key);
-    // En modo "add" no se permite seleccionar horas ocupadas (PENDIENTE/ACEPTADO)
     if (mode === 'add' && (c?.status === 'PENDIENTE' || c?.status === 'ACEPTADO')) {
       setMessage('⚠️ Esa hora ya está reservada.');
       return;
     }
 
-    // En modo "delete" solo se permiten celdas DISPONIBLES futuras
     if (mode === 'delete' && c?.status !== 'DISPONIBLE') {
       setMessage('⚠️ Solo puedes eliminar disponibilidad existente (DISPONIBLE) en futuro.');
       return;
     }
-    // toggle
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -130,13 +121,11 @@ const TutorAvailabilityPage: React.FC = () => {
       return next;
     });
   };
-  // limpia selección y mensaje
   const clear = () => {
     setSelected(new Set());
     setMessage(null);
   };
 
-  // Agrupar por día (solo futuras válidas)
   const byDay = useMemo(() => {
     const m = new Map<string, string[]>();
     selected.forEach(k => {
@@ -151,14 +140,25 @@ const TutorAvailabilityPage: React.FC = () => {
     return m;
   }, [selected]);
 
-  // === Confirmar AGREGAR ===
+  const isPastCell = (dateISO: string, hhmm: string) => !isSelectable(dateISO, hhmm);
+  const uiCells = useMemo<ScheduleCell[]>(() => {
+    return cells.map(c => {
+      const hhmm = toHHMM(c.hour);
+      const expiredNow = isPastCell(c.date, hhmm);
+      const s = (c.status ?? '').toUpperCase();
+      if (expiredNow && (s === 'DISPONIBLE' || s === 'PENDIENTE')) {
+        return { ...c, status: 'EXPIRED' as any };
+      }
+      return c;
+    });
+  }, [cells]);
+
   const confirmAdd = async () => {
     if (byDay.size === 0) {
       setMessage('⚠️ Selecciona una o más horas FUTURAS para agregar.');
       return;
     }
 
-    // filtra por si el usuario llegó a incluir horas ya reservadas o pasadas
     const validPairs: Array<[string, string[]]> = [];
     for (const [date, hours] of Array.from(byDay.entries())) {
       const ok = hours.filter((h: string) => {
@@ -168,7 +168,6 @@ const TutorAvailabilityPage: React.FC = () => {
       });
       if (ok.length) validPairs.push([date, ok]);
     }
-    // filtra por si el usuario llegó a incluir horas ya reservadas o pasadas
     if (validPairs.length === 0) {
       setMessage('⚠️ La selección no contiene horas válidas para agregar.');
       return;
@@ -178,13 +177,11 @@ const TutorAvailabilityPage: React.FC = () => {
       `¿Agregar disponibilidad en ${validPairs.length} día(s) con ${totalHours} hora(s) seleccionada(s)?`
     );
     if (!ok) return;
-    // ejecutar
     setLoading(true);
     try {
       let successCount = 0;
       let errorCount = 0;
       const errors: string[] = [];
-      // procesar por día
       for (const [date, hours] of validPairs) {
         try {
           const r = await addAvailability(date, hours, token);
@@ -198,7 +195,6 @@ const TutorAvailabilityPage: React.FC = () => {
       else if (successCount > 0)
         setMessage(`⚠️ ${successCount} agregadas, ${errorCount} fallaron.\n${errors.join('\n')}`);
       else setMessage(`❌ No se pudo agregar disponibilidad.\n${errors.join('\n')}`);
-      // recarga
       setSelected(new Set());
       await new Promise(r => setTimeout(r, 500));
       await load();
@@ -215,7 +211,6 @@ const TutorAvailabilityPage: React.FC = () => {
       return;
     }
 
-    // solo DISPONIBLE y en el futuro
     const cellsToDelete = Array.from(selected)
       .map(key => {
         const [date, hour] = key.split('_');
@@ -231,7 +226,6 @@ const TutorAvailabilityPage: React.FC = () => {
     }
     const ok = globalThis.confirm(`¿Eliminar ${cellsToDelete.length} hora(s) de disponibilidad?`);
     if (!ok) return;
-    // agrupar por día y ejecutar
     setLoading(true);
     try {
       const byDayDelete = new Map<string, string[]>();
@@ -240,12 +234,10 @@ const TutorAvailabilityPage: React.FC = () => {
         arr.push(toHHMM(c.hour));
         byDayDelete.set(c.date, arr);
       }
-      // procesar por día
       for (const [date, toRemove] of Array.from(byDayDelete.entries())) {
         const existing = cells
           .filter(c => c.date === date && c.status === 'DISPONIBLE')
           .map(c => toHHMM(c.hour));
-        // horas restantes
         const remaining = existing.filter(h => !toRemove.includes(h));
 
         if (remaining.length > 0) {
@@ -256,7 +248,6 @@ const TutorAvailabilityPage: React.FC = () => {
           });
           if (!res.ok) throw new Error(await res.text());
         } else {
-          // ✅ día sin horas restantes → DELETE del día
           await clearDayAvailability(date, token);
         }
       }
@@ -270,7 +261,6 @@ const TutorAvailabilityPage: React.FC = () => {
       setLoading(false);
     }
   };
-  // Navegación semana
   const prev = () => {
     setWeekStart(addDays(weekStart, -7));
     setSelected(new Set());
@@ -280,10 +270,9 @@ const TutorAvailabilityPage: React.FC = () => {
     setSelected(new Set());
   };
 
-  // Texto dinámico con la hora mínima permitida
   const minHourText = useMemo(
     () => nextSelectableHour().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    [weekStart] // cambia al navegar semanas; “ahora” se reevalúa en acciones
+    [weekStart] 
   );
 
   return (
@@ -329,7 +318,6 @@ const TutorAvailabilityPage: React.FC = () => {
           );
         })()}
 
-      {/* Selector de modo */}
       <div
         style={{
           display: 'flex',
@@ -385,7 +373,6 @@ const TutorAvailabilityPage: React.FC = () => {
         )}
       </div>
 
-      {/* Navegación semana */}
       <div className="week-nav" style={{ marginBottom: '16px' }}>
         <button className="btn-ghost" onClick={prev}>
           ◀ Semana anterior
@@ -400,10 +387,9 @@ const TutorAvailabilityPage: React.FC = () => {
 
       {loading && <div style={{ textAlign: 'center', padding: '20px' }}>⏳ Cargando...</div>}
 
-      {/* onToggle bloquea pasado y estados */}
       <WeekCalendar
         weekStart={weekStart}
-        cells={cells}
+        cells={uiCells}          
         mode="tutor"
         selectedKeys={selected}
         onToggle={toggle}
@@ -420,7 +406,7 @@ const TutorAvailabilityPage: React.FC = () => {
           fontSize: '12px',
         }}
       >
-        <strong>Debug:</strong> {cells.length} celdas cargadas para semana {weekStart}
+        <strong>Debug:</strong> {uiCells.length} celdas cargadas para semana {weekStart}
       </div>
     </div>
   );

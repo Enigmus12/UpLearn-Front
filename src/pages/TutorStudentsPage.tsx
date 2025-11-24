@@ -2,9 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { getTutorReservations, type Reservation } from '../service/Api-scheduler';
 import { ENV } from '../utils/env';
-import '../styles/TutorDashboard.css'; // Reutilizamos los estilos existentes
-
-// --- Interfaces y Tipos ---
+import '../styles/TutorDashboard.css'; 
 
 type PublicProfile = {
   id?: string;
@@ -22,8 +20,6 @@ type StudentWithHistory = {
   status: 'active' | 'inactive';
 };
 
-// --- Funciones de Utilidad ---
-
 function formatTime(timeStr?: string): string {
   if (!timeStr) return '';
   const s = timeStr.trim();
@@ -36,8 +32,6 @@ function formatDate(dateStr?: string): string {
   const d = new Date(dateStr.length === 10 ? `${dateStr}T00:00:00` : dateStr);
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
 }
-
-// --- Componente de Historial Paginado ---
 
 const HISTORY_PAGE_SIZE = 5;
 
@@ -97,8 +91,6 @@ const StudentHistory: React.FC<StudentHistoryProps> = ({ reservations }) => {
     </div>
   );
 };
-
-// --- Componente Principal ---
 
 const TutorStudentsPage: React.FC = () => {
   const { user, isLoading: authLoading } = useAuth();

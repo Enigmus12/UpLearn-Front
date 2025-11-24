@@ -90,14 +90,14 @@ const EditProfilePage: React.FC = () => {
       const decoded = decodeURIComponent(last);
       // Limpiar UUIDs y caracteres del servidor, quedarnos solo con el nombre real
       // Ejemplo: "588aed7a-8b45-44d8-ab8d-f7c2eb2e05f5_Taller_Access_Control.pdf" -> "Taller_Access_Control.pdf"
-      const cleaned = decoded.replace(/^[a-f0-9\-]+_/i, '');
+      const cleaned = decoded.replace(/^[a-f0-9-]+_/i, '');
       return cleaned || decoded;
     } catch {
       const parts = url.split('?')[0].split('#')[0].split('/');
       const last = parts.filter(Boolean).pop();
       if (!last) return 'Archivo';
       const decoded = decodeURIComponent(last);
-      const cleaned = decoded.replace(/^[a-f0-9\-]+_/i, '');
+      const cleaned = decoded.replace(/^[a-f0-9-]+_/i, '');
       return cleaned || decoded;
     }
   };
@@ -207,11 +207,14 @@ const EditProfilePage: React.FC = () => {
     }
   };
 
-  const removeSpecialization = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      specializations: prev.specializations.filter((_, i) => i !== index)
-    }));
+  const removeSpecialization = (indexToRemove: number) => {
+    setFormData(prev => {
+      const newSpecializations = prev.specializations.filter((_, i) => i !== indexToRemove);
+      return {
+        ...prev,
+        specializations: newSpecializations
+      };
+    });
   };
 
   // Remover credencial (URL) ya subida en backend y UI

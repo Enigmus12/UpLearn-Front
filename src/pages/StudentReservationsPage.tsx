@@ -23,12 +23,12 @@ import {
   localStableChatId,
 } from "../service/Api-chat";
 import { ChatSocket } from "../service/ChatSocket";
-import { createCallSession } from "../service/callApi";
+import { createCallSession } from "../service/Api-call";
 
 import { AppHeader, type ActiveSection } from "./StudentDashboard";
 import { studentMenuNavigate, type StudentMenuSection } from "../utils/StudentMenu";
 
-// ----------------- Utilidades fecha/hora -----------------
+// Utilidades fecha/hora 
 function toISODateLocal(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -58,7 +58,7 @@ function isPresentReservation(r: ApiReservation, now: Date = new Date()): boolea
   return end.getTime() >= now.getTime();
 }
 
-// ----------------- Reglas de estado (nuevas) -----------------
+// Reglas de estado
 function getEffectiveStatus(res: ApiReservation): ApiReservation["status"] {
   const now = new Date();
   const startTime = new Date(`${res.date}T${formatTime(res.start)}`);
@@ -84,11 +84,11 @@ function getEffectiveStatus(res: ApiReservation): ApiReservation["status"] {
   return raw as ApiReservation["status"];
 }
 
-// ----------------- Tipos propios -----------------
+// Tipos propios 
 interface User { userId: string; name: string; email: string; role: string; educationLevel?: string; }
 interface Reservation extends ApiReservation { effectiveStatus: ApiReservation["status"]; tutorName?: string; }
 
-// ----------------- Chat helpers -----------------
+// Chat helpers 
 const mapAnyToServerShape = (raw: any, fallbackChatId: string): ChatMessageData => ({
   id: String(raw?.id ?? cryptoRandomId()),
   chatId: String(raw?.chatId ?? fallbackChatId),
@@ -180,7 +180,10 @@ const ChatSidePanel: React.FC<{
         const hist = await getChatHistory(cid ?? "", token);
         if (!mounted) return;
         setMessages(hist);
-      } catch { if (!mounted) return; setMessages([]); }
+      } catch {
+        if (!mounted) return;
+        setMessages([]);
+      }
     })();
     return () => { mounted = false; };
   }, [contact.id, myUserId, token]);
@@ -214,7 +217,6 @@ const ChatSidePanel: React.FC<{
   );
 };
 
-// ----------------- Página -----------------
 const StudentReservationsPage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
@@ -229,7 +231,7 @@ const StudentReservationsPage: React.FC = () => {
   }, [auth.isAuthenticated, auth.user]);
 
   const { userRoles, isAuthenticated, needsRoleSelection } = useAuthFlow();
-  const { isProfileComplete, missingFields } = useProfileStatus();
+  useProfileStatus();
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   useEffect(() => {
@@ -250,7 +252,6 @@ const StudentReservationsPage: React.FC = () => {
   const [activeChatContact, setActiveChatContact] = useState<ChatContact | null>(null);
   const myUserId = auth.user?.profile.sub;
 
-  // Reservas
   const [weekStart, setWeekStart] = useState(() => mondayOf(todayLocalISO()));
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
   const [reservationsLoading, setReservationsLoading] = useState(false);
@@ -283,43 +284,45 @@ const StudentReservationsPage: React.FC = () => {
   useEffect(() => { if (token) loadMyReservations(); }, [token]);
   useEffect(() => { if (token) loadMyReservations(); }, [weekStart]);
 
-  // Enriquecer nombres de tutores
+  const fetchTutorProfile = async (idOrSub: string, token: string) => {
+    const headers: Record<string, string> = { Accept: "application/json", Authorization: `Bearer ${token}` };
+    const tryQuery = async (key: "id" | "sub") => {
+      const url = `${USERS_BASE}${PROFILE_PATH}?${key}=${encodeURIComponent(idOrSub)}`;
+      const resp = await fetch(url, { headers });
+      return resp.ok ? resp.json() : null;
+    };
+    const prof = (await tryQuery("id")) ?? (await tryQuery("sub"));
+    return { id: idOrSub, prof };
+  };
+
   useEffect(() => {
-    const ids = Array.from(new Set(myReservations.map(r => r?.tutorId).filter(Boolean) as string[]))
+    const ids = Array.from(new Set(myReservations.map(r => r?.tutorId).filter(Boolean)))
       .filter(id => !profilesByTutorId[id]);
     if (ids.length === 0 || !token) return;
 
     let cancelled = false;
     (async () => {
       try {
-        const settled = await Promise.allSettled(
-          ids.map(async (idOrSub) => {
-            const headers: Record<string, string> = { Accept: "application/json" };
-            headers.Authorization = `Bearer ${token}`;
-            const tryQuery = async (key: "id" | "sub") => {
-              const url = `${USERS_BASE}${PROFILE_PATH}?${key}=${encodeURIComponent(idOrSub)}`;
-              const resp = await fetch(url, { headers });
-              if (!resp.ok) return null;
-              return await resp.json();
-            };
-            return { id: idOrSub, prof: (await tryQuery("id")) ?? (await tryQuery("sub")) };
-          })
-        );
+        const settled = await Promise.allSettled(ids.map(idOrSub => fetchTutorProfile(idOrSub, token)));
         if (cancelled) return;
+
         const next: Record<string, any> = {};
         for (const r of settled) {
           if (r.status === "fulfilled" && r.value.prof) {
-            next[r.value.id] = {
-              id: r.value.prof?.id,
-              sub: r.value.prof?.sub,
-              name: r.value.prof?.name || r.value.prof?.fullName || "Tutor",
-              email: r.value.prof?.email,
-              avatarUrl: r.value.prof?.avatarUrl,
+            const { id, prof } = r.value;
+            next[id] = {
+              id: prof?.id,
+              sub: prof?.sub,
+              name: prof?.name || prof?.fullName || "Tutor",
+              email: prof?.email,
+              avatarUrl: prof?.avatarUrl,
             };
           }
         }
-        if (Object.keys(next).length > 0) setProfilesByTutorId(prev => ({ ...prev, ...next }));
-      } catch { /* noop */ }
+        if (Object.keys(next).length > 0) {
+          setProfilesByTutorId(prev => ({ ...prev, ...next }));
+        }
+      } catch { }
     })();
     return () => { cancelled = true; };
   }, [myReservations, profilesByTutorId, USERS_BASE, PROFILE_PATH, token]);
@@ -402,7 +405,6 @@ const StudentReservationsPage: React.FC = () => {
     return styles[s] || { label: s, color: "#6b7280", bg: "rgba(107,114,128,.12)" };
   };
 
-  // misma firma que AppHeader (ActiveSection) y mapeo al helper
   const onHeaderSectionChange = (section: ActiveSection) => {
     if (section === "none") return;
     studentMenuNavigate(navigate, section as StudentMenuSection);
@@ -410,8 +412,6 @@ const StudentReservationsPage: React.FC = () => {
 
   return (
     <div className="dashboard-container">
-      {/* CORRECCIÓN 1: Eliminamos la línea del div con marginTop que causaba el espacio en blanco */}
-      {/* {!isProfileComplete && missingFields && <div style={{ marginTop: 8 }} />}  <-- ELIMINADO */}
 
       <AppHeader
         currentUser={currentUser}
@@ -423,7 +423,6 @@ const StudentReservationsPage: React.FC = () => {
         <div className="tasks-section">
           <h1>Mis Reservas 🗓️</h1>
 
-          {/* ... (stats-grid) ... */}
           <div className="stats-grid" style={{ marginTop: 8, marginBottom: 16 }}>
             <div className="stat-card"><div className="stat-icon">🗓️</div><div className="stat-info"><h3>{upcomingCount}</h3><p>Reservas presentes</p></div></div>
             <div className="stat-card"><div className="stat-icon">🧑‍🏫</div><div className="stat-info"><h3>{tutorsWithRequestsOrReservations}</h3><p>Tutores con solicitudes/reservas</p></div></div>
@@ -446,7 +445,6 @@ const StudentReservationsPage: React.FC = () => {
                   </div>
 
                   <div style={{ display: "flex", gap: 8 }}>
-                    {/* CORRECCIÓN 2: Añadido 'btn-nav' para que tenga el mismo ancho (140px) */}
                     <button
                       className="btn btn-nav"
                       onClick={() => setShowAll(!showAll)}

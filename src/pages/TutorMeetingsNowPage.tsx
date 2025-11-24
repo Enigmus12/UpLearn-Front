@@ -1,9 +1,8 @@
-// src/pages/TutorMeetingsNowPage.tsx
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useNavigate } from 'react-router-dom';
 import { getTutorReservations, type Reservation } from '../service/Api-scheduler';
-import { createCallSession } from '../service/callApi';
+import { createCallSession } from '../service/Api-call';
 
 import '../styles/TutorDashboard.css';
 import '../styles/Chat.css';
@@ -18,7 +17,6 @@ import {
 } from '../service/Api-chat';
 import { ChatSocket } from '../service/ChatSocket';
 
-/* -------------------- Utils fecha/hora -------------------- */
 function toISODateLocal(d: Date): string {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -58,7 +56,6 @@ function getEffectiveStatus(res: Reservation): string {
     return raw || 'DESCONOCIDO';
 }
 
-/* -------------------- Chat helpers -------------------- */
 const mapAnyToServerShape = (raw: any, fallbackChatId: string): ChatMessageData => ({
     id: String(raw?.id ?? cryptoRandomId()),
     chatId: String(raw?.chatId ?? fallbackChatId),
@@ -186,7 +183,6 @@ const ChatSidePanel: React.FC<ChatSidePanelProps> = ({ contact, myUserId, token,
     );
 };
 
-/* -------------------- Página principal (solo Reunirse/Contactar) -------------------- */
 const USERS_BASE = ENV.USERS_BASE;
 const PROFILE_PATH = ENV.USERS_PROFILE_PATH;
 
@@ -270,7 +266,6 @@ const TutorMeetingsNowPage: React.FC = () => {
                 return;
             }
 
-            // CAMBIO: Pasamos el token aquí
             const { sessionId } = await createCallSession(res.id, token);
 
             sessionStorage.setItem('call:reservation:' + sessionId, String(res.id));
@@ -373,7 +368,6 @@ const TutorMeetingsNowPage: React.FC = () => {
                 <p style={{ marginTop: -8, opacity: .7 }}>(Contenido de clases programadas y completadas)</p>
                 {message && <output className="status-message" aria-live="polite">{message}</output>}
 
-                {/* Filtros */}
                 <div className="filters-card">
                     <div className="filters-row">
                         <div className="search-input">
@@ -419,7 +413,6 @@ const TutorMeetingsNowPage: React.FC = () => {
                             {group.reservations.map((res: any) => {
                                 const effectiveStatus = res.effectiveStatus;
 
-                                // BOTONES disponibles SOLO en ACEPTADO, INCUMPLIDA y ACTIVA
                                 const allow = ['ACTIVA'].includes(effectiveStatus);
                                 const allowChat = ['ACEPTADO', 'INCUMPLIDA', 'ACTIVA'].includes(effectiveStatus);
                                 const canContact = allowChat;

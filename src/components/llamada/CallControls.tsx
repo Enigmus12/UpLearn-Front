@@ -7,8 +7,8 @@ type Props = {
   onEnd: () => void;
 };
 
-export default function CallControls({ onToggleMic, onToggleCam, onShareScreen, onEnd }: Props) {
-  // Estados locales solo para cambiar el icono visualmente
+export default function CallControls({ onToggleMic, onToggleCam, onShareScreen, onEnd }: Readonly<Props>) {
+  // Estados locales para iconos
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [sharing, setSharing] = useState(false);
@@ -30,10 +30,9 @@ export default function CallControls({ onToggleMic, onToggleCam, onShareScreen, 
 
   return (
     <div className="call-controls-group">
-      {/* Botón Micrófono */}
       <button 
         onClick={handleMic} 
-        className={`call-btn ${!micOn ? 'off' : ''}`}
+        className={`call-btn ${micOn ? '' : 'off'}`}
         title={micOn ? "Apagar micrófono" : "Encender micrófono"}
       >
         {micOn ? (
@@ -43,10 +42,9 @@ export default function CallControls({ onToggleMic, onToggleCam, onShareScreen, 
         )}
       </button>
 
-      {/* Botón Cámara */}
       <button 
         onClick={handleCam} 
-        className={`call-btn ${!camOn ? 'off' : ''}`}
+        className={`call-btn ${camOn ? '' : 'off'}`}
         title={camOn ? "Apagar cámara" : "Encender cámara"}
       >
         {camOn ? (
@@ -56,7 +54,6 @@ export default function CallControls({ onToggleMic, onToggleCam, onShareScreen, 
         )}
       </button>
 
-      {/* Botón Compartir Pantalla */}
       <button 
         onClick={handleShare} 
         className={`call-btn ${sharing ? 'active-share' : ''}`}
@@ -65,7 +62,6 @@ export default function CallControls({ onToggleMic, onToggleCam, onShareScreen, 
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="m16 8-4-4-4 4"/></svg>
       </button>
 
-      {/* Botón Colgar (Separado visualmente) */}
       <div style={{ width: 1, background: 'rgba(255,255,255,0.2)', margin: '0 4px', height: '32px' }}></div>
 
       <button 

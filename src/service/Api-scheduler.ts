@@ -1,6 +1,3 @@
-/**
- * API client for the student-tutor-scheduler microservice.
- */
 import { ENV } from '../utils/env';
 
 export type CellStatus =
@@ -44,7 +41,6 @@ export interface Reservation {
 
 const BASE = (ENV.SCHEDULER_BASE || 'http://localhost:8090').replace(/\/$/, '');
 
-// --- Funciones de utilidad ---
 function headers(token?: string) {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) h.Authorization = `Bearer ${token}`;
@@ -64,7 +60,6 @@ async function handle(res: Response) {
   return res.json();
 }
 
-// --- API de Reservas ---
 
 export async function createReservation(tutorId: string, date: string, hour: string, token?: string): Promise<Reservation> {
   const url = `${BASE}/api/reservations`;
@@ -102,7 +97,6 @@ export async function setReservationAttended(id: string, value: boolean, token?:
   return handle(res);
 }
 
-// --- API de Disponibilidad y Horarios (Funciones Re-añadidas) ---
 
 export async function getScheduleForTutor(tutorId: string, weekStart: string, token?: string): Promise<ScheduleCell[]> {
   const url = `${BASE}/api/schedule/tutor/${encodeURIComponent(tutorId)}?weekStart=${weekStart}`;
@@ -111,7 +105,6 @@ export async function getScheduleForTutor(tutorId: string, weekStart: string, to
 }
 
 export async function getPublicAvailabilityForTutor(tutorId: string, weekStart: string, token?: string): Promise<ScheduleCell[]> {
-  // Este endpoint podría ser el mismo que getScheduleForTutor o uno público específico
   return getScheduleForTutor(tutorId, weekStart, token);
 }
 

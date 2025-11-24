@@ -20,7 +20,7 @@ import {
 } from '../service/Api-chat';
 import { ChatSocket } from '../service/ChatSocket';
 
-/* -------------------- Utils fecha/hora -------------------- */
+// Funciones de Utilidad 
 function toISODateLocal(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -59,7 +59,6 @@ function getEffectiveStatus(res: Reservation): string {
   }
   return raw || 'DESCONOCIDO';
 }
-/* -------------------- Normalizador Chat -------------------- */
 const mapAnyToServerShape = (raw: any, fallbackChatId: string): ChatMessageData => ({
   id: String(raw?.id ?? cryptoRandomId()),
   chatId: String(raw?.chatId ?? fallbackChatId),
@@ -109,7 +108,6 @@ const ChatSidePanel: React.FC<ChatSidePanelProps> = ({ contact, myUserId, token,
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<ChatSocket | null>(null);
 
-  // Anti-ruido para logs de estado (evita "doble connecting" y "closed" fantasma)
   const lastStateRef = useRef<'connecting' | 'open' | 'closed' | 'error' | null>(null);
   const lastChangeTsRef = useRef<number>(0);
   const closedOnceRef = useRef(false);
@@ -129,15 +127,13 @@ const ChatSidePanel: React.FC<ChatSidePanelProps> = ({ contact, myUserId, token,
     lastStateRef.current = state;
     lastChangeTsRef.current = now;
 
-    // Cierra la ventana automáticamente si el WS se cerró o hubo error
     if ((state === 'closed' || state === 'error') && !closedOnceRef.current) {
       closedOnceRef.current = true;
-      onClose(); // esto hace setActiveChatContact(null)
+      onClose(); 
     }
   };
 
 
-  // Conectar WS solo una vez por montaje y con este token
   useEffect(() => {
     socketRef.current = new ChatSocket();
     socketRef.current.connect(
@@ -157,7 +153,6 @@ const ChatSidePanel: React.FC<ChatSidePanelProps> = ({ contact, myUserId, token,
     };
   }, [token]); 
 
-  // Resolver chatId (backend -> fallback SHA-256) y cargar historial
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -217,10 +212,8 @@ const ChatSidePanel: React.FC<ChatSidePanelProps> = ({ contact, myUserId, token,
   );
 };
 
-/* -------------------- Página principal -------------------- */
 const USERS_BASE = ENV.USERS_BASE;
 const PROFILE_PATH = ENV.USERS_PROFILE_PATH;
-/** Obtiene perfil público por ?id= o ?sub= */
 async function fetchPublicProfileByIdOrSub(base: string, path: string, idOrSub: string, token?: string) {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -259,7 +252,6 @@ const TutorClassesPage: React.FC = () => {
   const [pageSize, setPageSize] = useState<5 | 10 | 20>(5);
   const [activeChatContact, setActiveChatContact] = useState<ChatContact | null>(null);
 
-  // evita reintentos infinitos
   const requestedProfilesRef = useRef<Set<string>>(new Set());
   const norm = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
@@ -376,7 +368,6 @@ const TutorClassesPage: React.FC = () => {
             avatarUrl: p?.avatarUrl,
           };
         } else {
-          // fallback
           const id = (r as any).reason?.id || 'unknown';
           nextProfiles[id] = { id, sub: id, name: 'Estudiante', email: 'N/A' };
         }
@@ -418,7 +409,6 @@ const TutorClassesPage: React.FC = () => {
         <h1 style={{ marginBottom: 8 }}>Solicitudes</h1>
         {message && <output className="status-message" aria-live="polite">{message}</output>}
 
-        {/* Filtros */}
         <div className="filters-card">
           <div className="filters-row">
             <div className="search-input">
@@ -492,7 +482,15 @@ const TutorClassesPage: React.FC = () => {
                         title={canCancel ? 'Cancelar esta reserva' : 'No se puede cancelar en este estado'}
                       >
                         ✗ Cancelar
-                      </button> 
+                      </button>
+                      <button
+                        className="btn-action btn-contact"
+                        onClick={() => handleContact(group.studentId, group.studentName, group.studentAvatar)}
+                        disabled={!canContact}
+                        title={canContact ? 'Contactar al estudiante' : 'Solo puedes contactar para clases aceptadas'}
+                      >
+                        💬 Contactar
+                      </button>
                     </div>
                   </div>
                 );
@@ -528,7 +526,3 @@ const TutorClassesPage: React.FC = () => {
 };
 
 export default TutorClassesPage;
-
-
-
-

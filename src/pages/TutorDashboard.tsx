@@ -1,4 +1,3 @@
-// src/pages/TutorDashboard.tsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
@@ -11,9 +10,8 @@ import ProfileIncompleteNotification from '../components/ProfileIncompleteNotifi
 import TutorAvailabilityPage from './TutorAvailabilityPage';
 import TutorClassesPage from './TutorClassesPage';
 import TutorStudentsPage from './TutorStudentsPage';
-import TutorMeetingsNowPage from './TutorMeetingsNowPage'; // <-- NUEVO
+import TutorMeetingsNowPage from './TutorMeetingsNowPage';
 
-/* Tipos */
 interface User {
   userId: string;
   name: string;
@@ -76,7 +74,6 @@ const TutorDashboard: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'dashboard' | 'my-students' | 'requests' | 'availability' | 'sessions' | 'create-session'>('dashboard');
 
-  /* Datos demo para el dashboard principal */
   const [students] = useState<Student[]>([
     { id: '1', name: 'Ana García',    email: 'ana@student.com',    educationLevel: 'Pregrado',  joinDate: '2025-09-01', status: 'active',   sessionsCompleted: 8 },
     { id: '2', name: 'Carlos Mendoza',email: 'carlos@student.com', educationLevel: 'Secundaria',joinDate: '2025-08-15', status: 'active',   sessionsCompleted: 12 },
@@ -240,10 +237,8 @@ const TutorDashboard: React.FC = () => {
 
         {activeSection === 'my-students' && <TutorStudentsPage />}
 
-        {/* Solicitudes (aceptar/cancelar) */}
         {activeSection === 'sessions' && <TutorClassesPage />}
 
-        {/* Mis Clases → vista nueva con “Reunirse ahora” y “Contactar” */}
         {activeSection === 'requests' && <TutorMeetingsNowPage />}
 
         {activeSection === 'availability' && <TutorAvailabilityPage />}
