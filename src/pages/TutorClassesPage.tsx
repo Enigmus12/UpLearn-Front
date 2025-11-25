@@ -6,6 +6,8 @@ import {
   getTutorReservations,
   type Reservation,
 } from '../service/Api-scheduler';
+import ApiPaymentService from '../service/Api-payment';
+import ApiUserService from '../service/Api-user';
 
 import '../styles/TutorDashboard.css';
 import '../styles/Chat.css';
@@ -275,26 +277,86 @@ const TutorClassesPage: React.FC = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAccept = async (reservationId: string) => {
-    if (!token) return;
+  const handleAccept = async (reservationId: string, studentId: string) => {
+    if (!token || !myUserId) return;
     try {
-      await acceptReservation(reservationId, token);
-      setMessage('✅ Clase aceptada');
+      // Primero aceptar la reservación
+      await acceptReservation(reservationId, studentId, token);
+      
+      // Consultar tarifa del tutor (tokens por hora)
+      let tokensPerClass = 1;
+      try {
+        const rateResp: any = await ApiUserService.getTutorTokensRate(token);
+        const maybe = Number(rateResp?.tokensPerHour);
+        if (!Number.isNaN(maybe) && maybe > 0) tokensPerClass = maybe;
+      } catch (e) {
+        console.warn('No se pudo obtener tokensPerHour, usando 1 por defecto. Detalle:', e);
+      }
+
+      // Luego transferir los tokens del estudiante al tutor
+      await ApiPaymentService.transferTokens(
+        studentId,      // fromUserId: estudiante que paga
+        myUserId,        // toUserId: tutor que recibe
+        tokensPerClass,  // cantidad de tokens
+        reservationId,   // ID de la reservación
+        token
+      );
+      
+      setMessage('✅ Clase aceptada y tokens transferidos');
+      // Refrescar balance de tokens inmediatamente
+      try {
+        const data = await ApiPaymentService.getTutorBalance(token);
+        window.dispatchEvent(new CustomEvent('tokens:refresh'));
+      } catch (e) {
+        console.warn('No se pudo refrescar balance tras aceptación:', e);
+      }
       await load();
-    } catch (e: any) { setMessage('❌ ' + (e.message || 'Error al aceptar')); }
+    } catch (e: any) { 
+      setMessage('❌ ' + (e.message || 'Error al aceptar')); 
+    }
   };
 
-  const handleCancel = async (reservationId: string) => {
-    if (!token) return;
+  const handleCancel = async (reservationId: string, studentId: string) => {
+    if (!token || !myUserId) return;
     try {
+      // 1) Cancelar en scheduler
       await cancelReservation(reservationId, token);
+
+      // 2) Obtener tarifa del tutor (tokens por hora)
+      let tokensPerClass = 1;
+      try {
+        const rateResp: any = await ApiUserService.getTutorTokensRate(token);
+        const maybe = Number(rateResp?.tokensPerHour);
+        if (!Number.isNaN(maybe) && maybe > 0) tokensPerClass = maybe;
+      } catch (e) {
+        console.warn('No se pudo obtener tokensPerHour (cancel), usando 1 por defecto:', e);
+      }
+
+      // 3) Ejecutar refund/transfer según cancelación por tutor
+      await ApiPaymentService.refundOnCancellation({
+        fromUserId: studentId,
+        toUserId: myUserId,
+        tokens: tokensPerClass,
+        reservationId,
+        cancelledBy: 'TUTOR',
+        reason: 'Cancelación realizada por tutor'
+      }, token);
+
       setMessage('✅ Clase cancelada');
+      // Refrescar balance de tokens inmediatamente
+      try {
+        const data = await ApiPaymentService.getTutorBalance(token);
+        window.dispatchEvent(new CustomEvent('tokens:refresh'));
+      } catch (e) {
+        console.warn('No se pudo refrescar balance tras cancelación:', e);
+      }
       await load();
     } catch (e: any) {
       const msg = String(e?.message || '');
       if (msg.includes('409') || /Conflict/i.test(msg)) {
-        alert('No puedes cancelar una reserva que haya sido aceptada.');
-        setMessage('❌ No puedes cancelar una reserva que haya sido aceptada.');
+        const pretty = 'No se puede cancelar: solo PENDIENTE o ACEPTADO y con 12+ horas de antelación.';
+        alert(pretty);
+        setMessage('❌ ' + pretty);
       } else {
         setMessage('❌ ' + (e.message || 'Error al cancelar'));
       }
@@ -454,7 +516,9 @@ const TutorClassesPage: React.FC = () => {
               {group.reservations.map((res: any) => {
                 const effectiveStatus = res.effectiveStatus;
                 const canAccept = effectiveStatus === 'PENDIENTE';
-                const canCancel = effectiveStatus === 'PENDIENTE';
+                const startMs = new Date(`${res.date}T${formatTime(res.start)}`).getTime();
+                const hoursUntilStart = (startMs - Date.now()) / (1000 * 60 * 60);
+                const canCancel = (effectiveStatus === 'PENDIENTE' || effectiveStatus === 'ACEPTADO') && hoursUntilStart >= 12;
                 const canContact = effectiveStatus === 'ACEPTADO' || effectiveStatus === 'INCUMPLIDA';
 
                 return (
@@ -474,10 +538,10 @@ const TutorClassesPage: React.FC = () => {
                       </span>
                     </div>
                     <div className="reservation-actions">
-                      <button className="btn-action btn-accept" onClick={() => handleAccept(res.id)} disabled={!canAccept}>✓ Aceptar</button>
+                      <button className="btn-action btn-accept" onClick={() => handleAccept(res.id, group.studentId)} disabled={!canAccept}>✓ Aceptar</button>
                       <button
                         className="btn-action btn-cancel"
-                        onClick={() => handleCancel(res.id)}
+                        onClick={() => handleCancel(res.id, group.studentId)}
                         disabled={!canCancel}
                         title={canCancel ? 'Cancelar esta reserva' : 'No se puede cancelar en este estado'}
                       >

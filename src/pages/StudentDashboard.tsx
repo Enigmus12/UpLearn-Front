@@ -14,7 +14,9 @@ import {
 import DashboardSwitchButton from "../components/DashboardSwitchButton";
 import AddRoleButton from "../components/AddRoleButton";
 import ProfileIncompleteNotification from "../components/ProfileIncompleteNotification";
+import BuyTokensModal from "../components/BuyTokensModal";
 import { studentMenuNavigate, type StudentMenuSection } from "../utils/StudentMenu";
+import ApiPaymentService from "../service/Api-payment";
 
 // ---------- Utilidades fecha/hora ----------
 function toISODateLocal(d: Date): string {
@@ -72,11 +74,15 @@ interface AppHeaderProps {
   currentUser: User | null;
   activeSection?: ActiveSection;
   onSectionChange?: (section: ActiveSection) => void;
+  tokenBalance?: number;
+  onBuyTokensClick?: () => void;
 }
 export const AppHeader: React.FC<AppHeaderProps> = ({
   currentUser,
   activeSection = "none",
   onSectionChange = () => {},
+  tokenBalance = 0,
+  onBuyTokensClick = () => {},
 }) => {
   const navigate = useNavigate();
   const auth = useAuth();
@@ -118,7 +124,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             onClick={() => onSectionChange("my-reservations")}
             type="button"
           ><span>🗓️</span> Mis Reservas</button>
-
           <button
             className={`nav-item ${activeSection === "my-tasks" ? "active" : ""}`}
             onClick={() => onSectionChange("my-tasks")}
@@ -133,6 +138,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </nav>
 
         <div className="header-actions" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div className="token-display" onClick={onBuyTokensClick} style={{ cursor: "pointer" }}>
+            <img src="/coin-icon.png" alt="Moneda" className="token-icon" style={{ width: "24px", height: "24px", objectFit: "contain" }} />
+            <span className="token-amount">{tokenBalance}</span>
+            <span className="token-label">tokens</span>
+          </div>
+
           <div className="user-menu-container">
             <button className="user-avatar" onClick={() => setShowUserMenu(!showUserMenu)} type="button">
               <span className="avatar-icon">👤</span>
@@ -186,6 +197,32 @@ const StudentDashboard: React.FC = () => {
   const [showProfileBanner, setShowProfileBanner] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
+  const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [showBuyTokensModal, setShowBuyTokensModal] = useState(false);
+
+  // Cargar balance de tokens
+  useEffect(() => {
+    if (!token) return;
+    
+    const loadTokenBalance = async () => {
+      try {
+        const balanceData = await ApiPaymentService.getStudentBalance(token);
+        setTokenBalance(balanceData.tokenBalance);
+      } catch (error) {
+        console.error("Error cargando balance de tokens:", error);
+        setTokenBalance(0);
+      }
+    };
+
+    loadTokenBalance();
+    
+    // Actualizar balance cada 30 segundos
+    const interval = setInterval(loadTokenBalance, 30000);
+    // Escuchar evento global para refresco inmediato
+    const onRefresh = () => { loadTokenBalance(); };
+    window.addEventListener('tokens:refresh', onRefresh);
+    return () => { clearInterval(interval); window.removeEventListener('tokens:refresh', onRefresh); };
+  }, [token]);
 
   // Lee ?section= para abrir subsecciones directamente
   useEffect(() => {
@@ -266,7 +303,20 @@ const StudentDashboard: React.FC = () => {
         />
       )}
 
-      <AppHeader currentUser={currentUser} activeSection={activeSection} onSectionChange={onHeaderSectionChange} />
+      <BuyTokensModal
+        isOpen={showBuyTokensModal}
+        onClose={() => setShowBuyTokensModal(false)}
+        currentBalance={tokenBalance}
+        cognitoToken={token}
+      />
+
+      <AppHeader 
+        currentUser={currentUser} 
+        activeSection={activeSection} 
+        onSectionChange={onHeaderSectionChange}
+        tokenBalance={tokenBalance}
+        onBuyTokensClick={() => setShowBuyTokensModal(true)}
+      />
 
       <main className="dashboard-main">
         {activeSection === "dashboard" && (

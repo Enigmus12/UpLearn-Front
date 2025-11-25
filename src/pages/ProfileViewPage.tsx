@@ -20,6 +20,8 @@ interface ProfileState {
     bio?: string;
     specializations?: string[];
     credentials?: string[];
+    // Tarifa en tokens por hora (tutor)
+    tokensPerHour?: number;
   };
 }
 
@@ -151,6 +153,17 @@ const ProfileViewPage: React.FC = () => {
                     <input id="credentials" className="form-input" value="—" disabled readOnly />
                   )}
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="tokensPerHour">Tarifa (Tokens por Hora)</label>
+                <input
+                  id="tokensPerHour"
+                  className="form-input"
+                  value={typeof (profile as any).tokensPerHour === 'number' && (profile as any).tokensPerHour > 0 ? `${(profile as any).tokensPerHour} tokens/hora` : '—'}
+                  readOnly
+                  disabled
+                />
               </div>
             </div>
           )}

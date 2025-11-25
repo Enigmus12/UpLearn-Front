@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "react-oidc-context";
 import '../styles/TutorDashboard.css';
+import ApiPaymentService from '../service/Api-payment';
 import { useAuthFlow } from '../utils/useAuthFlow';
 import { useProfileStatus } from '../utils/useProfileStatus';
 import DashboardSwitchButton from '../components/DashboardSwitchButton';
@@ -73,6 +74,7 @@ const TutorDashboard: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'dashboard' | 'my-students' | 'requests' | 'availability' | 'sessions' | 'create-session'>('dashboard');
+  const [tokenBalance, setTokenBalance] = useState<number>(0);
 
   const [students] = useState<Student[]>([
     { id: '1', name: 'Ana García',    email: 'ana@student.com',    educationLevel: 'Pregrado',  joinDate: '2025-09-01', status: 'active',   sessionsCompleted: 8 },
@@ -102,8 +104,30 @@ const TutorDashboard: React.FC = () => {
         email: auth.user.profile?.email || 'No email',
         role: 'tutor',
       });
+      // Cargar balance de tokens al entrar
+      const loadBalance = async () => {
+        try {
+          const token = (auth.user as any)?.id_token ?? auth.user?.access_token;
+          if (!token) return;
+          const data = await ApiPaymentService.getTutorBalance(token);
+          setTokenBalance(data.tokenBalance);
+        } catch (e) {
+          setTokenBalance(0);
+        }
+      };
+      loadBalance();
+      const interval = setInterval(loadBalance, 30000);
+      // Escuchar eventos globales para refrescar inmediatamente el balance
+      const onRefresh = () => { loadBalance(); };
+      window.addEventListener('tokens:refresh', onRefresh);
+      return () => clearInterval(interval);
     }
   }, [isAuthenticated, userRoles, navigate, auth.user]);
+
+  // Limpieza del listener si el usuario cambia
+  useEffect(() => {
+    return () => { window.removeEventListener('tokens:refresh', () => {}); };
+  }, []);
 
   const handleLogout = async () => {
     auth.removeUser();
@@ -147,6 +171,11 @@ const TutorDashboard: React.FC = () => {
           </nav>
 
           <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div className="token-display" /* solo visual, no compra */>
+              <img src="/coin-icon.png" alt="Moneda" className="token-icon" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+              <span className="token-amount">{tokenBalance}</span>
+              <span className="token-label">tokens</span>
+            </div>
             <div className="user-menu-container">
               <button className="user-avatar" onClick={() => setShowUserMenu(!showUserMenu)}>
                 <span className="avatar-icon">👨‍🏫</span>

@@ -20,6 +20,8 @@ interface User {
   bio?: string;
   specializations?: string[];
   credentials?: string[];
+  // Nueva tarifa en tokens por hora (solo tutor)
+  tokensPerHour?: number | null;
 }
 
 interface UpdateData {
@@ -35,6 +37,7 @@ interface UpdateData {
   bio?: string;
   specializations?: string[];
   credentials?: string[];
+  tokensPerHour?: number | null;
 }
 
 interface DeleteRoleResponse {
@@ -69,7 +72,8 @@ const EditProfilePage: React.FC = () => {
     educationLevel: '',
     bio: '',
     specializations: [] as string[],
-    credentials: [] as string[]
+    credentials: [] as string[],
+    tokensPerHour: '' as string | number // manejado como string hasta submit
   });
 
   // Estados para inputs dinámicos
@@ -152,7 +156,8 @@ const EditProfilePage: React.FC = () => {
           educationLevel: editableData.educationLevel || '',
           bio: editableData.bio || '',
           specializations: editableData.specializations || [],
-          credentials: editableData.credentials || []
+          credentials: editableData.credentials || [],
+          tokensPerHour: editableData.tokensPerHour ?? null
         };
 
         setCurrentUser(userData);
@@ -165,7 +170,8 @@ const EditProfilePage: React.FC = () => {
           educationLevel: editableData.educationLevel || '',
           bio: editableData.bio || '',
           specializations: editableData.specializations || [],
-          credentials: editableData.credentials || []
+          credentials: editableData.credentials || [],
+          tokensPerHour: (editableData.tokensPerHour != null ? String(editableData.tokensPerHour) : '')
         });
         setCredentialNames((editableData.credentials || []).map((u: string) => deriveNameFromUrl(u)));
         
@@ -349,6 +355,12 @@ const EditProfilePage: React.FC = () => {
       if (formData.specializations.length === 0) {
         newErrors.specializations = 'Debe tener al menos una especialización';
       }
+      if (String(formData.tokensPerHour).trim() !== '') {
+        const val = parseInt(String(formData.tokensPerHour), 10);
+        if (isNaN(val) || val <= 0) {
+          newErrors.tokensPerHour = 'Ingresa un número válido (>0)';
+        }
+      }
       // Las credenciales ya no son obligatorias
     }
 
@@ -388,6 +400,14 @@ const EditProfilePage: React.FC = () => {
         updateData.bio = formData.bio;
         updateData.specializations = formData.specializations;
         updateData.credentials = formData.credentials;
+        if (String(formData.tokensPerHour).trim() !== '') {
+          const parsed = parseInt(String(formData.tokensPerHour), 10);
+          if (!isNaN(parsed) && parsed > 0) {
+            updateData.tokensPerHour = parsed;
+          }
+        } else {
+          updateData.tokensPerHour = null;
+        }
       }
 
       // Usar endpoint específico según el rol actual
@@ -673,6 +693,22 @@ const EditProfilePage: React.FC = () => {
                   disabled={isSaving}
                 />
                 {errors.bio && <span className="error-message">{errors.bio}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Tokens por Hora</label>
+                <input
+                  type="number"
+                  name="tokensPerHour"
+                  min={1}
+                  className={`form-input ${errors.tokensPerHour ? 'error' : ''}`}
+                  placeholder="Ej: 50"
+                  value={formData.tokensPerHour}
+                  onChange={handleInputChange}
+                  disabled={isSaving}
+                />
+                {errors.tokensPerHour && <span className="error-message">{errors.tokensPerHour}</span>}
+                <p className="help-text">Tarifa en tokens que cobrarás por cada hora de tutoría. Déjalo vacío si aún no decides.</p>
               </div>
 
               <div className="form-group">

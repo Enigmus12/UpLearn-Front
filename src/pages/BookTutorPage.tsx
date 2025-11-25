@@ -10,6 +10,7 @@ import {
   type ScheduleCell,
 } from '../service/Api-scheduler';
 import { AppHeader } from './StudentDashboard'; 
+import ApiPaymentService from '../service/Api-payment';
 
 function parseISODateLocal(iso: string): Date {
   // iso = 'YYYY-MM-DD'
@@ -45,6 +46,7 @@ interface NavState {
     bio?: string;
     specializations?: string[];
     credentials?: string[];
+    tokensPerHour?: number;
   };
   role?: 'tutor' | 'student';
 }
@@ -111,8 +113,13 @@ const BookTutorPage: React.FC = () => {
   const [scheduleCells, setScheduleCells] = useState<ScheduleCell[]>([]);
   const [selectedCell, setSelectedCell] = useState<ScheduleCell | null>(null);
   const [loading, setLoading] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState<number>(0);
 
   const [banner, setBanner] = useState<Banner>(null);
+  // Verificación de tokens vs tarifa
+  const [tokenCheck, setTokenCheck] = useState<{ hasEnoughTokens: boolean; requiredTokens: number; currentBalance: number } | null>(null);
+  const [checkingTokens, setCheckingTokens] = useState(false);
+  const [tokenCheckError, setTokenCheckError] = useState('');
 
   // Referencia de tiempo actual para filtrar el pasado
   const [now, setNow] = useState(new Date());
@@ -142,6 +149,51 @@ const BookTutorPage: React.FC = () => {
       setToken(undefined);
     }
   }, [auth.isAuthenticated, auth.user]);
+
+  // Cargar balance de tokens
+  useEffect(() => {
+    if (!token) return;
+    const loadBalance = async () => {
+      try {
+        const data = await ApiPaymentService.getStudentBalance(token);
+        setTokenBalance(data.tokenBalance);
+      } catch (e) {
+        console.error('Error cargando balance:', e);
+      }
+    };
+    loadBalance();
+  }, [token]);
+
+  // Verificar tokens suficientes para la tarifa del tutor
+  useEffect(() => {
+    const required = Number((profile as any)?.tokensPerHour);
+    if (!token || !required || required <= 0) {
+      setTokenCheck(null);
+      setTokenCheckError('');
+      return; // Sin tarifa definida o gratuita
+    }
+    let cancelled = false;
+    const runCheck = async () => {
+      setCheckingTokens(true);
+      setTokenCheckError('');
+      try {
+        const r = await ApiPaymentService.checkStudentTokens(required, token);
+        if (!cancelled) {
+          setTokenCheck({
+            hasEnoughTokens: !!r.hasEnoughTokens,
+            requiredTokens: Number(r.requiredTokens),
+            currentBalance: Number(r.currentBalance)
+          });
+        }
+      } catch (err: any) {
+        if (!cancelled) setTokenCheckError(err?.message || 'Error verificando tokens');
+      } finally {
+        if (!cancelled) setCheckingTokens(false);
+      }
+    };
+    runCheck();
+    return () => { cancelled = true; };
+  }, [token, profile]);
 
   // Identificador efectivo del tutor
   const effectiveTutorId = useMemo(
@@ -183,6 +235,13 @@ const BookTutorPage: React.FC = () => {
     );
     if (!ok) return;
 
+    // Validar saldo contra tarifa definida
+    const required = Number((profile as any)?.tokensPerHour);
+    if (required > 0 && tokenCheck && !tokenCheck.hasEnoughTokens) {
+      setBanner({ type: 'error', text: `No tienes suficientes tokens (saldo ${tokenCheck.currentBalance}, requiere ${tokenCheck.requiredTokens}). Compra tokens antes de reservar.` });
+      return;
+    }
+
     try {
       await createReservation(effectiveTutorId, selectedCell.date, selectedCell.hour, token);
       setBanner({ type: 'success', text: '¡Reserva creada correctamente!' });
@@ -217,7 +276,7 @@ const BookTutorPage: React.FC = () => {
 
   return (
     <div className="dashboard-container">
-      <AppHeader currentUser={currentUser} onSectionChange={handleSectionChange} />
+      <AppHeader currentUser={currentUser} onSectionChange={handleSectionChange} tokenBalance={tokenBalance} />
 
       <main className="dashboard-main">
         <div style={{ padding: 16, maxWidth: 1100, margin: '0 auto' }}>
@@ -270,6 +329,21 @@ const BookTutorPage: React.FC = () => {
                         : '—'}
                     </div>
                   </div>
+                  <div className="compact-profile__block">
+                    <h4>Tarifa</h4>
+                    <p>{Number((profile as any)?.tokensPerHour) > 0 ? `${(profile as any).tokensPerHour} tokens/hora` : '— (sin definir)'}</p>
+                    {Number((profile as any)?.tokensPerHour) > 0 && (
+                      <div style={{ fontSize: 13 }}>
+                        {checkingTokens && <p>Verificando saldo...</p>}
+                        {tokenCheckError && <p style={{ color: '#991B1B' }}>{tokenCheckError}</p>}
+                        {tokenCheck && !checkingTokens && (
+                          <p>
+                            Saldo: <strong>{tokenCheck.currentBalance}</strong> tokens — {tokenCheck.hasEnoughTokens ? '✅ suficiente' : '❌ insuficiente'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -283,7 +357,7 @@ const BookTutorPage: React.FC = () => {
             </div>
             <div className="action-strip__right">
               <button className="btn btn-secondary" onClick={() => navigate(-1)}>Volver</button>
-              <button className="btn btn-primary" onClick={confirmReservation} disabled={!selectedCell}>
+              <button className="btn btn-primary" onClick={confirmReservation} disabled={!selectedCell || (Number((profile as any)?.tokensPerHour) > 0 && (tokenCheck ? !tokenCheck.hasEnoughTokens : false))}>
                 Confirmar Reserva
               </button>
             </div>

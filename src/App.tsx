@@ -16,6 +16,8 @@ import TutorMeetingsNowPage from './pages/TutorMeetingsNowPage';
 import CallPage from './pages/CallPage';
 import StudentReservationsPage from './pages/StudentReservationsPage';
 import StudentFindsTutorsPage from './pages/StudentFindsTutorsPage';
+import PaymentSuccessPage from './pages/PaymentSuccessPage';
+import PaymentCancelPage from './pages/PaymentCancelPage';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({
@@ -317,6 +319,14 @@ const App: React.FC = () => {
                   <StudentFindsTutorsPage />
                 </ProtectedRoute>
               }
+            />
+            <Route
+              path="/payment-success"
+              element={<PaymentSuccessPage />}
+            />
+            <Route
+              path="/payment-cancel"
+              element={<PaymentCancelPage />}
             />
           
 

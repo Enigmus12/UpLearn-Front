@@ -11,6 +11,7 @@ import ApiSearchService from "../service/Api-search";
 import ProfileIncompleteNotification from "../components/ProfileIncompleteNotification";
 import { AppHeader, type ActiveSection } from "./StudentDashboard";
 import { studentMenuNavigate } from "../utils/StudentMenu";
+import ApiPaymentService from "../service/Api-payment";
 
 interface User {
   userId: string;
@@ -27,7 +28,8 @@ interface TutorCard {
   specializations?: string[];
   credentials?: string[];
   rating?: number;
-  hourlyRate?: number;
+  // Tarifa en tokens por hora definida por el tutor
+  tokensPerHour?: number;
 }
 
 const StudentFindsTutorsPage: React.FC = () => {
@@ -42,6 +44,7 @@ const StudentFindsTutorsPage: React.FC = () => {
   const [loadingSearch, setLoadingSearch] = useState<boolean>(false);
   const [errorSearch, setErrorSearch] = useState<string>("");
   const [showProfileBanner, setShowProfileBanner] = useState(true);
+  const [tokenBalance, setTokenBalance] = useState<number>(0);
 
   useEffect(() => {
     if (isAuthenticated === null || userRoles === null) return;
@@ -57,6 +60,21 @@ const StudentFindsTutorsPage: React.FC = () => {
       });
     }
   }, [isAuthenticated, userRoles, needsRoleSelection, navigate, auth.user]);
+
+  // Cargar balance de tokens
+  useEffect(() => {
+    const token = (auth.user as any)?.id_token ?? auth.user?.access_token;
+    if (!token) return;
+    const loadBalance = async () => {
+      try {
+        const data = await ApiPaymentService.getStudentBalance(token);
+        setTokenBalance(data.tokenBalance);
+      } catch (e) {
+        console.error('Error cargando balance:', e);
+      }
+    };
+    loadBalance();
+  }, [auth.user]);
 
   const handleSearchTutors = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -97,6 +115,7 @@ const StudentFindsTutorsPage: React.FC = () => {
         currentUser={currentUser}
         activeSection={"find-tutors"}
         onSectionChange={onHeaderSectionChange}
+        tokenBalance={tokenBalance}
       />
 
       <main className="dashboard-main">
@@ -140,6 +159,10 @@ const StudentFindsTutorsPage: React.FC = () => {
                         <span key={s} className="tag">{s}</span>
                       ))}
                     </div>
+                  )}
+
+                  {typeof tutor.tokensPerHour === 'number' && tutor.tokensPerHour > 0 && (
+                    <p className="tutor-rate"><strong>Tarifa:</strong> {tutor.tokensPerHour} tokens/hora</p>
                   )}
 
                   <div className="tutor-actions">

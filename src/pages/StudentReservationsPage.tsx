@@ -26,7 +26,10 @@ import { ChatSocket } from "../service/ChatSocket";
 import { createCallSession } from "../service/Api-call";
 
 import { AppHeader, type ActiveSection } from "./StudentDashboard";
+import ApiPaymentService from "../service/Api-payment";
+import ApiUserService from "../service/Api-user";
 import { studentMenuNavigate, type StudentMenuSection } from "../utils/StudentMenu";
+
 
 // Utilidades fecha/hora 
 function toISODateLocal(d: Date): string {
@@ -258,6 +261,22 @@ const StudentReservationsPage: React.FC = () => {
 
   const [showAll, setShowAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+    const [tokenBalance, setTokenBalance] = useState<number>(0);
+
+    // Cargar balance de tokens
+    useEffect(() => {
+      const token = (auth.user as any)?.id_token ?? auth.user?.access_token;
+      if (!token) return;
+      const loadBalance = async () => {
+        try {
+          const data = await ApiPaymentService.getStudentBalance(token);
+          setTokenBalance(data.tokenBalance);
+        } catch (e) {
+          console.error('Error cargando balance:', e);
+        }
+      };
+      loadBalance();
+    }, [auth.user]);
   const RESERVATIONS_PER_PAGE = 15;
 
   const USERS_BASE = ENV.USERS_BASE;
@@ -316,6 +335,7 @@ const StudentReservationsPage: React.FC = () => {
               name: prof?.name || prof?.fullName || "Tutor",
               email: prof?.email,
               avatarUrl: prof?.avatarUrl,
+              tokensPerHour: prof?.tokensPerHour,
             };
           }
         }
@@ -357,14 +377,64 @@ const StudentReservationsPage: React.FC = () => {
   );
   useEffect(() => { setCurrentPage(1); }, [showAll, weekStart]);
 
-  const cancelTutorReservation = async (id: string, effStatus?: string | null) => {
+  const cancelTutorReservation = async (res: Reservation) => {
     if (!token) return;
-    if ((effStatus || "").toUpperCase() !== "PENDIENTE") {
-      alert("Solo se pueden cancelar reservas con estado PENDIENTE.");
+    const eff = (res.effectiveStatus || '').toUpperCase();
+    const startMs = new Date(`${res.date}T${formatTime(res.start)}`).getTime();
+    const hoursUntilStart = (startMs - Date.now()) / (1000 * 60 * 60);
+    const allowed = (eff === 'PENDIENTE' || eff === 'ACEPTADO') && hoursUntilStart >= 12;
+    if (!allowed) {
+      alert('Solo puedes cancelar reservas PENDIENTE o ACEPTADO y con 12+ horas de antelación.');
       return;
     }
-    if (globalThis.confirm("¿Seguro que quieres cancelar esta reserva?")) {
-      await cancelReservation(id, token);
+    if (globalThis.confirm('¿Seguro que quieres cancelar esta reserva?')) {
+      // 1) Cancelar en scheduler (si falla, no seguimos)
+      await cancelReservation(res.id, token);
+
+      // 2) Gestión de tokens dependiendo del estado al cancelar
+      // - PENDIENTE: no hay movimientos de tokens
+      // - ACEPTADO: reembolso al estudiante y descuento al tutor
+      if (eff === 'ACEPTADO') {
+        // Determinar tokens por clase vía endpoint público; fallback al perfil ya cargado
+        let tokensPerClass = 0;
+        try {
+          const rate = await ApiUserService.getTutorTokensRateBySubOrId(res.tutorId);
+          const maybe = Number(rate?.tokensPerHour);
+          if (!Number.isNaN(maybe) && maybe > 0) tokensPerClass = maybe;
+        } catch {
+          const prof = profilesByTutorId[res.tutorId];
+          const maybe = Number(prof?.tokensPerHour);
+          if (!Number.isNaN(maybe) && maybe > 0) tokensPerClass = maybe;
+        }
+
+        if (tokensPerClass > 0) {
+          const mySub = myUserId || currentUser?.userId || '';
+          try {
+            await ApiPaymentService.refundOnCancellation({
+              fromUserId: mySub,         // estudiante (recibe reembolso)
+              toUserId: res.tutorId,     // tutor (pierde)
+              tokens: tokensPerClass,
+              reservationId: res.id,
+              cancelledBy: 'TUTOR',      // usar valor que activa reembolso al estudiante en backend
+              reason: 'Reembolso por cancelación del estudiante en reserva aceptada'
+            }, token);
+          } catch (e) {
+            console.warn('No se pudo procesar el reembolso por cancelación del estudiante:', e);
+          }
+        } else {
+          console.warn('No se pudo determinar tokensPerClass para procesar reembolso.');
+        }
+
+        // Refrescar balance del estudiante
+        try {
+          const balanceData = await ApiPaymentService.getStudentBalance(token);
+          setTokenBalance(balanceData.tokenBalance);
+          window.dispatchEvent(new CustomEvent('tokens:refresh'));
+        } catch (e) {
+          console.warn('No se pudo refrescar balance inmediatamente:', e);
+        }
+      }
+
       await loadMyReservations();
     }
   };
@@ -417,6 +487,7 @@ const StudentReservationsPage: React.FC = () => {
         currentUser={currentUser}
         activeSection={"my-reservations"}
         onSectionChange={onHeaderSectionChange}
+        tokenBalance={tokenBalance}
       />
 
       <main className="dashboard-main dashboard-main--tight">
@@ -475,7 +546,9 @@ const StudentReservationsPage: React.FC = () => {
                     const b = statusBadge(r.effectiveStatus);
                     const prof = profilesByTutorId[r.tutorId];
                     const tutorName = prof?.name || (r as any).tutorName || "Tutor";
-                    const canCancel = r.effectiveStatus === "PENDIENTE";
+                    const startMs = new Date(`${r.date}T${formatTime(r.start)}`).getTime();
+                    const hoursUntilStart = (startMs - Date.now()) / (1000 * 60 * 60);
+                    const canCancel = (r.effectiveStatus === 'PENDIENTE' || r.effectiveStatus === 'ACEPTADO') && hoursUntilStart >= 12;
                     const canContact = r.effectiveStatus === "ACEPTADO" || r.effectiveStatus === "INCUMPLIDA";
 
                     return (
@@ -515,9 +588,9 @@ const StudentReservationsPage: React.FC = () => {
                           <button
                             type="button"
                             className="btn btn-danger"
-                            onClick={() => cancelTutorReservation(r.id, r.effectiveStatus)}
+                            onClick={() => cancelTutorReservation(r)}
                             disabled={!canCancel}
-                            title={canCancel ? "Cancelar esta reserva" : "No se puede cancelar en este estado"}
+                            title={canCancel ? "Cancelar esta reserva" : "Solo si falta 12+ horas y estado PENDIENTE/ACEPTADO"}
                           >
                             Cancelar
                           </button>
