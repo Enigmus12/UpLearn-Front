@@ -18,4 +18,10 @@ export const ENV = {
   USERS_PROFILE_PATH:
     viteEnv.VITE_USERS_PROFILE_PATH ||
     '/public/profile',
+
+  // Base del payment service
+  PAYMENT_BASE:
+    viteEnv.VITE_PAYMENT_BASE_URL ||
+    process.env.REACT_APP_PAYMENT_API_BASE ||
+    'http://localhost:8081/api',
 };

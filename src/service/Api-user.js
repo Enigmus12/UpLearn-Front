@@ -349,6 +349,61 @@ class ApiUserService {
   }
 
   /**
+   * Obtiene la tarifa de tokens por hora del tutor autenticado
+   * @param {string} cognitoToken - Token de Cognito
+   * @returns {Promise<{tokensPerHour: number}>}
+   */
+  static async getTutorTokensRate(cognitoToken = null) {
+    const token = cognitoToken || this.getToken();
+    if (!token) {
+      throw new Error('No hay token de autenticación');
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/tutor/tokens-rate`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor obteniendo tarifa de tokens:', errorText);
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Error obteniendo tarifa de tokens del tutor:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene la tarifa de tokens por hora de un tutor público por sub o id (sin token)
+   * Endpoint esperado: GET /tutor/tokens-rate-by-sub?sub=xxx o ?id=xxx
+   * @param {string} idOrSub - Identificador del tutor (sub o id)
+   * @returns {Promise<{tokensPerHour:number}>}
+   */
+  static async getTutorTokensRateBySubOrId(idOrSub) {
+    if (!idOrSub) throw new Error('idOrSub requerido');
+    const tryFetch = async (queryKey) => {
+      const url = `${API_BASE_URL}/tutor/tokens-rate-by-sub?${queryKey}=${encodeURIComponent(idOrSub)}`;
+      const resp = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      if (!resp.ok) return null;
+      try { return await resp.json(); } catch { return null; }
+    };
+    // Intentar primero como sub, luego como id
+    const bySub = await tryFetch('sub');
+    if (bySub && typeof bySub.tokensPerHour !== 'undefined') return bySub;
+    const byId = await tryFetch('id');
+    if (byId && typeof byId.tokensPerHour !== 'undefined') return byId;
+    throw new Error('No se pudo obtener tokensPerHour del tutor');
+  }
+
+  /**
    * Obtiene todos los usuarios (requiere autenticación)
    * @returns {Promise<User[]>}
    */

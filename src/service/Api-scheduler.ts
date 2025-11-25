@@ -51,10 +51,11 @@ async function handle(res: Response) {
   if (!res.ok) {
     let body: any = null;
     try { body = await res.json(); } catch { body = await res.text().catch(() => null); }
-    const msg = typeof body === 'string'
+    const baseMsg = typeof body === 'string'
       ? body
       : body?.message || body?.error || body?.path || `HTTP ${res.status}`;
-    throw new Error(msg);
+    const msgWithStatus = `HTTP ${res.status}: ${baseMsg}`;
+    throw new Error(msgWithStatus);
   }
   if (res.status === 204) return null as any;
   return res.json();
@@ -85,9 +86,18 @@ export async function cancelReservation(id: string, token?: string): Promise<Res
   return handle(res);
 }
 
-export async function acceptReservation(id: string, token?: string): Promise<Reservation> {
+export async function acceptReservation(
+  id: string,
+  studentId?: string,
+  token?: string
+): Promise<Reservation> {
   const url = `${BASE}/api/reservations/${id}/accept`;
-  const res = await fetch(url, { method: 'PATCH', headers: headers(token) });
+  const body = studentId ? JSON.stringify({ studentId }) : undefined;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: headers(token),
+    body
+  });
   return handle(res);
 }
 
