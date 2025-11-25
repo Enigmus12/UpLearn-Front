@@ -321,22 +321,10 @@ const TutorClassesPage: React.FC = () => {
     try {
       // 1) Cancelar en scheduler
       await cancelReservation(reservationId, token);
-
-      // 2) Obtener tarifa del tutor (tokens por hora)
-      let tokensPerClass = 1;
-      try {
-        const rateResp: any = await ApiUserService.getTutorTokensRate(token);
-        const maybe = Number(rateResp?.tokensPerHour);
-        if (!Number.isNaN(maybe) && maybe > 0) tokensPerClass = maybe;
-      } catch (e) {
-        console.warn('No se pudo obtener tokensPerHour (cancel), usando 1 por defecto:', e);
-      }
-
-      // 3) Ejecutar refund/transfer según cancelación por tutor
+      // 2) Notificar refund/cancelación (backend decide tokens automáticamente)
       await ApiPaymentService.refundOnCancellation({
         fromUserId: studentId,
         toUserId: myUserId,
-        tokens: tokensPerClass,
         reservationId,
         cancelledBy: 'TUTOR',
         reason: 'Cancelación realizada por tutor'

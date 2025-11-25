@@ -357,14 +357,15 @@ class ApiPaymentService {
   }
 
   /**
-   * Procesa reembolso o transferencia por cancelación (según quién cancela)
-   * cancelledBy: 'STUDENT' (transfiere al tutor) | 'TUTOR' (reembolsa al estudiante)
+   * Maneja cancelaciones tanto por estudiante como por tutor.
+   * Nuevo flujo: el backend determina automáticamente los tokens a reembolsar
+   * según el estado de la reservación y si ya hubo transferencia previa.
+   * cancelledBy: 'STUDENT' | 'TUTOR'
    */
   static async refundOnCancellation(
     params: {
-      fromUserId: string;
-      toUserId: string;
-      tokens: number;
+      fromUserId: string;   // Estudiante
+      toUserId: string;     // Tutor
       reservationId: string;
       cancelledBy: 'STUDENT' | 'TUTOR';
       reason?: string;
@@ -391,7 +392,7 @@ class ApiPaymentService {
       }
       return response.json();
     } catch (error) {
-      console.error('Error procesando refund/transfer by cancellation:', error);
+      console.error('Error procesando cancelación (refund):', error);
       throw error;
     }
   }
