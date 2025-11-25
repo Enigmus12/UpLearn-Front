@@ -390,41 +390,20 @@ const StudentReservationsPage: React.FC = () => {
     if (globalThis.confirm('¿Seguro que quieres cancelar esta reserva?')) {
       // 1) Cancelar en scheduler (si falla, no seguimos)
       await cancelReservation(res.id, token);
-
-      // 2) Gestión de tokens dependiendo del estado al cancelar
-      // - PENDIENTE: no hay movimientos de tokens
-      // - ACEPTADO: reembolso al estudiante y descuento al tutor
+      // 2) Si estaba ACEPTADO se solicita reembolso (backend calcula tokens).
       if (eff === 'ACEPTADO') {
-        // Determinar tokens por clase vía endpoint público; fallback al perfil ya cargado
-        let tokensPerClass = 0;
+        const mySub = myUserId || currentUser?.userId || '';
         try {
-          const rate = await ApiUserService.getTutorTokensRateBySubOrId(res.tutorId);
-          const maybe = Number(rate?.tokensPerHour);
-          if (!Number.isNaN(maybe) && maybe > 0) tokensPerClass = maybe;
-        } catch {
-          const prof = profilesByTutorId[res.tutorId];
-          const maybe = Number(prof?.tokensPerHour);
-          if (!Number.isNaN(maybe) && maybe > 0) tokensPerClass = maybe;
+          await ApiPaymentService.refundOnCancellation({
+            fromUserId: mySub,
+            toUserId: res.tutorId,
+            reservationId: res.id,
+            cancelledBy: 'STUDENT',
+            reason: 'Cancelación por estudiante'
+          }, token);
+        } catch (e) {
+          console.warn('No se pudo procesar refund por cancelación del estudiante:', e);
         }
-
-        if (tokensPerClass > 0) {
-          const mySub = myUserId || currentUser?.userId || '';
-          try {
-            await ApiPaymentService.refundOnCancellation({
-              fromUserId: mySub,         // estudiante (recibe reembolso)
-              toUserId: res.tutorId,     // tutor (pierde)
-              tokens: tokensPerClass,
-              reservationId: res.id,
-              cancelledBy: 'TUTOR',      // usar valor que activa reembolso al estudiante en backend
-              reason: 'Reembolso por cancelación del estudiante en reserva aceptada'
-            }, token);
-          } catch (e) {
-            console.warn('No se pudo procesar el reembolso por cancelación del estudiante:', e);
-          }
-        } else {
-          console.warn('No se pudo determinar tokensPerClass para procesar reembolso.');
-        }
-
         // Refrescar balance del estudiante
         try {
           const balanceData = await ApiPaymentService.getStudentBalance(token);
