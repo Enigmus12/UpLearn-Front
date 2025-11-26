@@ -144,11 +144,20 @@ const ChatSidePanel: React.FC<{
 
   const onWsState = (state: "connecting" | "open" | "closed" | "error") => {
     const now = Date.now();
-    if (state === "connecting" && lastStateRef.current === "connecting") return;
-    const noisyClosed = state === "closed" && lastStateRef.current === "connecting" && (now - lastChangeTsRef.current) < 500;
-    if (noisyClosed) return;
+
+    const prev = lastStateRef.current;
     lastStateRef.current = state;
     lastChangeTsRef.current = now;
+
+    if (state === "connecting") return;
+
+    if (state === "closed" && (now - lastChangeTsRef.current) < 800) {
+      return;
+    }
+
+    const hadOpen = prev === "open" || closedOnceRef.current;
+    if (!hadOpen) return;
+
     if ((state === "closed" || state === "error") && !closedOnceRef.current) {
       closedOnceRef.current = true;
       onClose();

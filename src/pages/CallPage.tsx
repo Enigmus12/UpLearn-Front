@@ -5,7 +5,8 @@ import CallControls from '../components/llamada/CallControls';
 import { getIceServers } from '../service/Api-call';
 import '../styles/CallPage.css';
 
-// Tipos y Utilidades 
+// ---------------- Tipos ----------------
+
 type Envelope = {
   type: string;
   sessionId: string;
@@ -22,11 +23,13 @@ function ulid() {
 }
 
 const getStatusClass = (state: string) => {
-  const s = state.toLowerCase();
+  const s = (state || '').toLowerCase();
   if (s === 'connected' || s === 'completed' || s === 'stable') return 'connected';
   if (s.includes('fail') || s.includes('close') || s.includes('error')) return 'failed';
-  return ''; 
+  return '';
 };
+
+// ---------------- Componente principal ----------------
 
 export default function CallPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -41,7 +44,7 @@ export default function CallPage() {
     return sessionStorage.getItem('call:reservation:' + sessionId) || '';
   });
 
-  // Refs de RTC y WS 
+  // Refs de RTC y WS
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -53,19 +56,21 @@ export default function CallPage() {
   const camStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
-  // Estado UI  
+  // Estado UI
   const [connState, setConnState] = useState<string>('Inicializando...');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState<boolean>(false);
 
-  // Colas y Flags Internos ---
+  // Flags internos para negociación
   const iceCandidatesQueue = useRef<RTCIceCandidate[]>([]);
   const wsOpenRef = useRef(false);
   const joinAckRef = useRef(false);
   const sentOfferRef = useRef(false);
   const gotRemoteDescRef = useRef(false);
+  const isOffererRef = useRef(false);         // 👈 quién manda OFFER
+  const sentRtcConnectedRef = useRef(false);  // para mandar RTC_CONNECTED solo 1 vez
 
-  // Debug State 
+  // Debug
   const [debug, setDebug] = useState({
     wsState: 'N/A',
     pcSignaling: 'N/A',
@@ -81,11 +86,16 @@ export default function CallPage() {
   const safeWarn = (...args: any[]) => console.warn('[CALL]', ...args);
   const safeErr = (...args: any[]) => console.error('[CALL]', ...args);
 
-  // WebSocket Helper 
+  // ------------- Helper WS -------------
+
   const send = (wsInstance: WebSocket | null, env: Partial<Envelope>) => {
     if (!wsInstance) { safeWarn('send(): ws null'); return; }
     if (wsInstance.readyState !== WebSocket.OPEN) {
       safeWarn('send(): ws not OPEN, state=', wsInstance.readyState);
+      return;
+    }
+    if (!sessionId) {
+      safeWarn('send(): no sessionId');
       return;
     }
     const payload = {
@@ -100,24 +110,39 @@ export default function CallPage() {
     wsInstance.send(JSON.stringify(payload));
   };
 
-  // Lógica de Negociación (Offer)
+  // ------------- Negociación: OFFER -------------
+
   const maybeStartOffer = async () => {
     const pc = pcRef.current;
-    if (!pc || sentOfferRef.current) {
-      if (!pc) safeWarn('maybeStartOffer(): no pc');
+    if (!pc) {
+      safeWarn('maybeStartOffer(): no pc');
       return;
     }
-    const hasMedia = Boolean(localVideo.current?.srcObject as MediaStream | null);
+    if (sentOfferRef.current) return;
+
+    // Solo el peer marcado como "offerer" debe crear y enviar la OFFER
+    if (!isOffererRef.current) {
+      safeLog('maybeStartOffer(): soy peer pasivo, no envío OFFER');
+      return;
+    }
+
+    const hasMedia = !!camStreamRef.current;
     if (!wsOpenRef.current || !joinAckRef.current || !hasMedia) {
       safeLog('maybeStartOffer(): esperando condiciones', {
-        wsOpen: wsOpenRef.current, joinAck: joinAckRef.current, hasMedia
+        wsOpen: wsOpenRef.current,
+        joinAck: joinAckRef.current,
+        hasMedia,
       });
       return;
     }
+
     try {
       sentOfferRef.current = true;
       safeLog('Creando y enviando OFFER…');
-      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
       await pc.setLocalDescription(offer);
       send(wsRef.current, { type: 'OFFER', payload: offer });
     } catch (e) {
@@ -126,12 +151,8 @@ export default function CallPage() {
     }
   };
 
-  const startOffer = async () => {
-    safeLog('Botón Conectar pulsado');
-    await maybeStartOffer();
-  };
+  // ------------- Efecto principal -------------
 
-  // Efecto Principal: Inicialización
   useEffect(() => {
     safeLog('MOUNT CallPage', { sessionId, reservationId, hasToken: !!token, userId });
     updateDebug({ lastMsg: 'mount', hasLocalMedia: 'no' });
@@ -161,22 +182,63 @@ export default function CallPage() {
         });
         pcRef.current = pcLocal;
 
-        // Media Local
+        // -------- Media local optimizada (audio limpio + poco ancho de banda) --------
         setConnState('Accediendo a dispositivos...');
         safeLog('Solicitando getUserMedia…');
-        const camStream: MediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        camStreamRef.current = camStream;
-        
-        if (localVideo.current) localVideo.current.srcObject = camStream;
-        camStream.getTracks().forEach((track: MediaStreamTrack) => pcLocal.addTrack(track, camStream));
-        updateDebug({ hasLocalMedia: 'sí' });
 
-        // Eventos RTC
+        const constraints: MediaStreamConstraints = {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: {
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 360, max: 720 },
+            frameRate: { ideal: 24, max: 30 },
+          },
+        };
+
+        const camStream: MediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (!isMounted) {
+          camStream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        camStreamRef.current = camStream;
+
+        if (localVideo.current) {
+          localVideo.current.srcObject = camStream;
+        }
+
+        camStream.getTracks().forEach((track: MediaStreamTrack) => {
+          pcLocal.addTrack(track, camStream);
+        });
+
+        // Limitar bitrate de video para no consumir mucho ancho de banda
+        pcLocal.getSenders().forEach((sender) => {
+          if (!sender.track || sender.track.kind !== 'video') return;
+          const params = sender.getParameters();
+          if (!params.encodings || params.encodings.length === 0) {
+            params.encodings = [{}];
+          }
+          params.encodings[0].maxBitrate = 600_000;   // ~600 kbps
+          params.encodings[0].maxFramerate = 24;
+          sender.setParameters(params).catch((err) => safeWarn('setParameters(video) failed', err));
+        });
+
+        updateDebug({ hasLocalMedia: 'sí' });
+        void maybeStartOffer();
+
+        // -------- Eventos RTC --------
         pcLocal.ontrack = (ev) => {
           safeLog('ontrack: stream remoto recibido');
-          if (remoteVideo.current) remoteVideo.current.srcObject = ev.streams[0];
+          const [stream] = ev.streams;
+          if (remoteVideo.current && stream) {
+            remoteVideo.current.srcObject = stream;
+          }
         };
-        
+
         pcLocal.onicecandidate = (ev) => {
           if (ev.candidate) {
             send(wsRef.current, { type: 'ICE_CANDIDATE', payload: ev.candidate });
@@ -184,19 +246,28 @@ export default function CallPage() {
         };
 
         pcLocal.oniceconnectionstatechange = () => {
-          setConnState(pcLocal.iceConnectionState);
           updateDebug({ pcIce: pcLocal.iceConnectionState });
         };
-        
+
         pcLocal.onsignalingstatechange = () => {
           updateDebug({ pcSignaling: pcLocal.signalingState });
         };
-        
+
         pcLocal.onconnectionstatechange = () => {
-          setConnState(pcLocal.connectionState);
+          const state = pcLocal.connectionState;
+          setConnState(state);
+          updateDebug({
+            pcSignaling: pcLocal.signalingState,
+            pcIce: pcLocal.iceConnectionState,
+          });
+
+          if (state === 'connected' && !sentRtcConnectedRef.current) {
+            sentRtcConnectedRef.current = true;
+            send(wsRef.current, { type: 'RTC_CONNECTED' });
+          }
         };
 
-        // WebSocket
+        // -------- WebSocket --------
         const envHost = (import.meta as any)?.env?.VITE_CALLS_HOST || (window as any).__CALLS_HOST__;
         const defaultHost = `${window.location.hostname}:8093`;
         const host = envHost || defaultHost;
@@ -211,14 +282,17 @@ export default function CallPage() {
         setConnState('Conectando al servidor...');
 
         ws.onopen = () => {
+          if (!isMounted) return;
           wsOpenRef.current = true;
           updateDebug({ wsState: 'OPEN', lastMsg: 'ws-open' });
           send(ws, { type: 'JOIN' });
+          void maybeStartOffer();
         };
 
         ws.onmessage = async (e) => {
           if (!isMounted) return;
           updateDebug({ lastMsg: 'ws-message' });
+
           const msg: Envelope = JSON.parse(e.data);
 
           if (msg.type === 'ERROR') {
@@ -228,43 +302,73 @@ export default function CallPage() {
           }
 
           if (msg.type === 'JOIN_ACK') {
+            const payloadAny: any = msg.payload ?? {};
+            const initiator = !!payloadAny.initiator;
+            // en el server: initiator == true para el PRIMERO que entra
+            // el segundo en entrar será el offerer
+            isOffererRef.current = !initiator;
             joinAckRef.current = true;
-            setTimeout(() => startOffer(), 300);
-            await maybeStartOffer();
+            safeLog('JOIN_ACK recibido', { initiator, isOfferer: isOffererRef.current });
+            void maybeStartOffer();
             return;
           }
 
-          if (msg.from === userId) return; 
+          // Ignorar mensajes enviados por mí mismo
+          if (msg.from === userId) {
+            return;
+          }
 
           try {
+            // ---------- OFFER ----------
             if (msg.type === 'OFFER') {
-              // Manejo de Glare simple
-              if (pcLocal.signalingState !== 'stable') {
-                await Promise.all([
-                  pcLocal.setLocalDescription({ type: 'rollback' } as any),
-                  pcLocal.setRemoteDescription(msg.payload as RTCSessionDescriptionInit),
-                ]);
-              } else {
-                await pcLocal.setRemoteDescription(msg.payload as RTCSessionDescriptionInit);
+              // Solo el que NO es offerer maneja la OFFER
+              if (isOffererRef.current) {
+                safeWarn('Soy offerer y recibí OFFER; la ignoro (evitar glare)');
+                return;
               }
+
+              if (pcLocal.signalingState !== 'stable') {
+                safeWarn('Ignorando OFFER: estado de signaling=', pcLocal.signalingState);
+                return;
+              }
+
+              const offerDesc = msg.payload as RTCSessionDescriptionInit;
+              await pcLocal.setRemoteDescription(offerDesc);
               gotRemoteDescRef.current = true;
-              
-              // Procesar cola ICE
+
+              // aplicar candidatos acumulados
               while (iceCandidatesQueue.current.length > 0) {
                 await pcLocal.addIceCandidate(iceCandidatesQueue.current.shift()!);
               }
-              
+
               const answer = await pcLocal.createAnswer();
               await pcLocal.setLocalDescription(answer);
               send(ws, { type: 'ANSWER', payload: answer });
-            } 
+            }
+
+            // ---------- ANSWER ----------
             else if (msg.type === 'ANSWER') {
-              await pcLocal.setRemoteDescription(msg.payload as RTCSessionDescriptionInit);
+              // Solo el offerer maneja ANSWER
+              if (!isOffererRef.current) {
+                safeWarn('No soy offerer y recibí ANSWER; la ignoro');
+                return;
+              }
+
+              if (pcLocal.signalingState !== 'have-local-offer') {
+                safeWarn('Ignorando ANSWER: signaling=', pcLocal.signalingState);
+                return;
+              }
+
+              const answerDesc = msg.payload as RTCSessionDescriptionInit;
+              await pcLocal.setRemoteDescription(answerDesc);
               gotRemoteDescRef.current = true;
+
               while (iceCandidatesQueue.current.length > 0) {
                 await pcLocal.addIceCandidate(iceCandidatesQueue.current.shift()!);
               }
-            } 
+            }
+
+            // ---------- ICE ----------
             else if (msg.type === 'ICE_CANDIDATE') {
               const candidate = new RTCIceCandidate(msg.payload);
               if (pcLocal.remoteDescription) {
@@ -272,11 +376,14 @@ export default function CallPage() {
               } else {
                 iceCandidatesQueue.current.push(candidate);
               }
-            } 
+            }
+
+            // ---------- END ----------
             else if (msg.type === 'END') {
               ws.close();
               navigate(-1);
             }
+
           } catch (err) {
             safeErr('Error manejando WS message', err);
           }
@@ -300,37 +407,49 @@ export default function CallPage() {
       }
     };
 
-    init();
+    void init();
 
+    // Heartbeat
     const hb = setInterval(() => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) send(wsRef.current, { type: 'HEARTBEAT' });
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        send(wsRef.current, { type: 'HEARTBEAT' });
+      }
     }, 10000);
 
+    // Cleanup
     return () => {
       isMounted = false;
       clearInterval(hb);
-      try { wsRef.current?.close(); } catch { }
-      try { pcRef.current?.close(); } catch { }
-      
-      const stopAll = (s: MediaStream | null) => s?.getTracks().forEach((trk) => trk.stop());
+
+      try { wsRef.current?.close(); } catch { /* ignore */ }
+      try { pcRef.current?.close(); } catch { /* ignore */ }
+
+      const stopAll = (s: MediaStream | null) =>
+        s?.getTracks().forEach((trk) => trk.stop());
       stopAll(screenStreamRef.current);
       stopAll(camStreamRef.current);
-      
+
       wsOpenRef.current = false;
       safeLog('UNMOUNT CallPage');
     };
   }, [sessionId, reservationId, token, auth.isLoading, auth.isAuthenticated]);
 
+  // ------------- Handlers de controles -------------
 
-  // Handlers de Controles 
   const onToggleMic = () => {
-    const s: MediaStream | null = (localVideo.current?.srcObject as MediaStream) || camStreamRef.current;
-    s?.getAudioTracks().forEach((t) => (t.enabled = !t.enabled));
+    const s: MediaStream | null =
+      (localVideo.current?.srcObject as MediaStream) || camStreamRef.current;
+    s?.getAudioTracks().forEach((t) => {
+      t.enabled = !t.enabled;
+    });
   };
 
   const onToggleCam = () => {
-    const s: MediaStream | null = (localVideo.current?.srcObject as MediaStream) || camStreamRef.current;
-    s?.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
+    const s: MediaStream | null =
+      (localVideo.current?.srcObject as MediaStream) || camStreamRef.current;
+    s?.getVideoTracks().forEach((t) => {
+      t.enabled = !t.enabled;
+    });
   };
 
   const stopScreenShare = async () => {
@@ -340,13 +459,16 @@ export default function CallPage() {
     const screenStream = screenStreamRef.current;
 
     const camTrack = camStream?.getVideoTracks()[0];
-    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+    const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
 
     if (sender && camTrack) {
       await sender.replaceTrack(camTrack);
-      if (localVideo.current && camStream) localVideo.current.srcObject = camStream;
+      if (localVideo.current && camStream) {
+        localVideo.current.srcObject = camStream;
+      }
     }
-    screenStream?.getTracks().forEach(t => t.stop());
+
+    screenStream?.getTracks().forEach((t) => t.stop());
     screenStreamRef.current = null;
     setIsSharing(false);
   };
@@ -354,70 +476,98 @@ export default function CallPage() {
   const onShareScreen = async () => {
     const pc = pcRef.current;
     if (!pc) return;
-    if (isSharing) return stopScreenShare();
+
+    if (isSharing) {
+      return stopScreenShare();
+    }
 
     try {
       const displayStream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
-        video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false
+        video: {
+          frameRate: { ideal: 15, max: 20 },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+        },
+        audio: false,
       });
+
       const screenTrack = displayStream.getVideoTracks()[0];
       if (!screenTrack) return;
 
-      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-      if (sender) await sender.replaceTrack(screenTrack);
-      else displayStream.getTracks().forEach(t => pc.addTrack(t, displayStream));
+      const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+      if (sender) {
+        await sender.replaceTrack(screenTrack);
+      } else {
+        displayStream.getTracks().forEach((t) => pc.addTrack(t, displayStream));
+      }
 
-      if (localVideo.current) localVideo.current.srcObject = displayStream;
+      if (localVideo.current) {
+        localVideo.current.srcObject = displayStream;
+      }
+
       screenStreamRef.current = displayStream;
       setIsSharing(true);
 
-      screenTrack.addEventListener('ended', () => stopScreenShare().catch(() => {}));
+      screenTrack.addEventListener('ended', () => {
+        stopScreenShare().catch(() => {});
+      });
     } catch (err) {
       safeErr('getDisplayMedia failed', err);
     }
   };
 
-  const onEnd = () => navigate(-1);
+  const onEnd = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      send(wsRef.current, { type: 'END' });
+    }
+    navigate(-1);
+  };
 
-  // Render
+  // ------------- Render -------------
 
-  if (auth.isLoading) return <div className="call-loading">Cargando autenticación...</div>;
-  
-  if (errorMsg) return (
-    <div className="call-error">
-      <h2>Ocurrió un error</h2>
-      <p>{errorMsg}</p>
-      <pre>
-        Session ID: {sessionId}{"\n"}
-        User: {userId || 'Desconocido'}
-      </pre>
-      <button onClick={() => navigate(-1)} className="btn-connect-header" style={{marginTop: '1rem'}}>
-        Volver
-      </button>
-    </div>
-  );
+  if (auth.isLoading) {
+    return <div className="call-loading">Cargando autenticación...</div>;
+  }
+
+  if (errorMsg) {
+    return (
+      <div className="call-error">
+        <h2>Ocurrió un error</h2>
+        <p>{errorMsg}</p>
+        <pre>
+          Session ID: {sessionId}
+          {'\n'}
+          User: {userId || 'Desconocido'}
+        </pre>
+        <button
+          onClick={() => navigate(-1)}
+          className="btn-connect-header"
+          style={{ marginTop: '1rem' }}
+        >
+          Volver
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="call-page-container">
       <div className="call-header">
         <h1>Sesión en Vivo</h1>
-        
+
         <div className="call-meta">
           <div className="status-badge">
             <div className={`status-dot ${getStatusClass(connState)}`} />
             <span className="status-text">{connState}</span>
           </div>
         </div>
-
-        
       </div>
 
       <div className="video-grid">
         <div className="remote-video-wrapper">
           <video ref={remoteVideo} autoPlay playsInline className="remote-video" />
         </div>
-        
+
         <div className="local-video-wrapper">
           <video ref={localVideo} autoPlay muted playsInline className="local-video" />
         </div>
@@ -430,7 +580,7 @@ export default function CallPage() {
         <div>ICE State: {debug.pcIce}</div>
         <div>Local Media: {debug.hasLocalMedia}</div>
         <div>Sharing: {isSharing ? 'Yes' : 'No'}</div>
-        <div style={{marginTop: 4, opacity: 0.7}}>{debug.lastMsg}</div>
+        <div style={{ marginTop: 4, opacity: 0.7 }}>{debug.lastMsg}</div>
       </div>
 
       <div className="controls-dock">
