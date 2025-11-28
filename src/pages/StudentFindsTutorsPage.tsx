@@ -77,6 +77,23 @@ const StudentFindsTutorsPage: React.FC = () => {
     loadBalance();
   }, [auth.user]);
 
+  // Cargar los 10 mejores tutores al iniciar
+  useEffect(() => {
+    const loadTopTutors = async () => {
+      setLoadingSearch(true);
+      try {
+        const result = await ApiSearchService.getTopTutors();
+        setTutors(result || []);
+      } catch (err: any) {
+        console.error('Error cargando mejores tutores:', err);
+        setErrorSearch('No se pudieron cargar los tutores recomendados');
+      } finally {
+        setLoadingSearch(false);
+      }
+    };
+    loadTopTutors();
+  }, []);
+
   const handleSearchTutors = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setLoadingSearch(true);
@@ -140,7 +157,7 @@ const StudentFindsTutorsPage: React.FC = () => {
 
             <div className="tutor-results">
               {tutors.length === 0 && !loadingSearch && (
-                <p>No hay resultados. Prueba con “java”.</p>
+                <p>No hay tutores disponibles en este momento.</p>
               )}
 
               {tutors.map((tutor) => (
