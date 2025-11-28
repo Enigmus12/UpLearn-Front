@@ -11,6 +11,7 @@ import {
 } from '../service/Api-scheduler';
 import { AppHeader } from './StudentDashboard'; 
 import ApiPaymentService from '../service/Api-payment';
+import type { Specialization } from '../types/specialization';
 
 function parseISODateLocal(iso: string): Date {
   // iso = 'YYYY-MM-DD'
@@ -44,7 +45,7 @@ interface NavState {
     name?: string;
     email?: string;
     bio?: string;
-    specializations?: string[];
+    specializations?: Specialization[]; // Ahora objetos Specialization
     credentials?: string[];
     tokensPerHour?: number;
   };
@@ -313,8 +314,15 @@ const BookTutorPage: React.FC = () => {
                     <h4>Especializaciones</h4>
                     <div className="tags-container">
                       {(profile as any).specializations?.length
-                        ? (profile as any).specializations.map((s: string) => (
-                            <span key={s} className="tag">{s}</span>
+                        ? (profile as any).specializations.map((spec: Specialization, idx: number) => (
+                            <span 
+                              key={idx} 
+                              className={`tag specialization-tag ${spec.verified ? 'verified' : 'manual'}`}
+                              title={spec.verified ? `Verificado por IA - ${spec.source}` : 'Agregado manualmente'}
+                            >
+                              {spec.verified && <span className="verified-icon">✓</span>}
+                              {spec.name}
+                            </span>
                           ))
                         : '—'}
                     </div>

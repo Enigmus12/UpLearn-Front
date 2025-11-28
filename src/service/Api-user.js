@@ -630,9 +630,10 @@ class ApiUserService {
   /**
    * Sube archivos de credenciales para el tutor autenticado.
    * El backend automáticamente: sube a Azure, valida con n8n, y guarda en BD solo documentos académicos válidos.
+   * Ahora también crea especializaciones verificadas automáticamente si el documento es validado.
    * @param {string} cognitoToken - Token de Cognito
    * @param {File[]} files - Array de archivos seleccionados
-   * @returns {Promise<{totalFiles: number, uploaded: number, validated: number, rejected: number, savedCredentials: string[], details: Array}>}
+   * @returns {Promise<{totalFiles: number, uploaded: number, validated: number, rejected: number, savedCredentials: string[], details: Array<{fileName: string, uploadedUrl: string, uploaded: boolean, saved: boolean, status: string, addedSpecialization?: string, validation?: object}>}>}
    */
   static async uploadTutorCredentials(cognitoToken, files) {
     if (!cognitoToken) {
@@ -672,9 +673,10 @@ class ApiUserService {
 
   /**
    * Elimina URLs de credenciales del tutor autenticado.
+   * Ahora también elimina automáticamente las especializaciones verificadas asociadas a esos documentos.
    * @param {string} cognitoToken - Token de Cognito
    * @param {string[]} urls - Arreglo de URLs a eliminar
-   * @returns {Promise<any>} Respuesta del backend con estado y credenciales restantes
+   * @returns {Promise<{removedCount: number, remainingCredentials: string[], tutorVerified: boolean, removedSpecializations: string[], deletedFromAzure: number}>} Respuesta del backend con estado y credenciales restantes
    */
   static async deleteTutorCredentials(cognitoToken, urls) {
     if (!cognitoToken) {
