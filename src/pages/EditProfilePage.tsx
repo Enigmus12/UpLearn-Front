@@ -4,6 +4,7 @@ import { useAuth } from "react-oidc-context";
 import ApiUserService from '../service/Api-user';
 import '../styles/EditProfilePage.css';
 import { useAuthFlow } from '../utils/useAuthFlow';
+import type { Specialization, DeleteCredentialsResponse, UploadCredentialsResponse } from '../types/specialization';
 
 interface User {
   userId: string;
@@ -18,7 +19,7 @@ interface User {
   educationLevel?: string;
   // Perfil de tutor
   bio?: string;
-  specializations?: string[];
+  specializations?: Specialization[]; // Ahora es un objeto, no string
   credentials?: string[];
   // Nueva tarifa en tokens por hora (solo tutor)
   tokensPerHour?: number | null;
@@ -35,7 +36,7 @@ interface UpdateData {
   educationLevel?: string;
   // Perfil de tutor
   bio?: string;
-  specializations?: string[];
+  specializations?: Specialization[]; // Ahora es un objeto, no string
   credentials?: string[];
   tokensPerHour?: number | null;
 }
@@ -71,7 +72,7 @@ const EditProfilePage: React.FC = () => {
     idNumber: '',
     educationLevel: '',
     bio: '',
-    specializations: [] as string[],
+    specializations: [] as Specialization[], // Ahora objetos Specialization
     credentials: [] as string[],
     tokensPerHour: '' as string | number // manejado como string hasta submit
   });
@@ -204,16 +205,31 @@ const EditProfilePage: React.FC = () => {
   };
 
   const addSpecialization = () => {
-    if (specializationInput.trim() && !formData.specializations.includes(specializationInput.trim())) {
+    const trimmed = specializationInput.trim();
+    if (trimmed && !formData.specializations.some(s => s.name === trimmed)) {
+      // Crear especialización manual
+      const newSpec: Specialization = {
+        name: trimmed,
+        verified: false,
+        source: 'MANUAL',
+        verifiedAt: null,
+        documentUrl: null
+      };
       setFormData(prev => ({
         ...prev,
-        specializations: [...prev.specializations, specializationInput.trim()]
+        specializations: [...prev.specializations, newSpec]
       }));
       setSpecializationInput('');
     }
   };
 
   const removeSpecialization = (indexToRemove: number) => {
+    const spec = formData.specializations[indexToRemove];
+    // No permitir eliminar especializaciones verificadas
+    if (spec.verified) {
+      alert('No puedes eliminar especializaciones verificadas. Elimina el documento asociado para quitarla.');
+      return;
+    }
     setFormData(prev => {
       const newSpecializations = prev.specializations.filter((_, i) => i !== indexToRemove);
       return {
@@ -234,30 +250,32 @@ const EditProfilePage: React.FC = () => {
     if (!url) return;
     try {
       setIsDeletingCredentialIndex(index);
-      const result: any = await ApiUserService.deleteTutorCredentials(auth.user.id_token, [url]);
+      const result = await ApiUserService.deleteTutorCredentials(auth.user.id_token, [url]) as DeleteCredentialsResponse;
 
-      // Intentar tomar la lista de credenciales restantes desde la respuesta si existe
-      const remainingFromBackend =
-        result?.remainingCredentials ||
-        result?.credentials ||
-        result?.remaining ||
-        result?.urls || null;
+      // Actualizar credenciales restantes
+      const remainingFromBackend = result?.remainingCredentials || [];
+      setFormData(prev => ({ ...prev, credentials: remainingFromBackend }));
+      setCredentialNames(remainingFromBackend.map((u: string) => deriveNameFromUrl(u)));
 
-      if (Array.isArray(remainingFromBackend)) {
-        setFormData(prev => ({ ...prev, credentials: remainingFromBackend }));
-        // recalcular nombres con las URLs restantes
-        setCredentialNames(remainingFromBackend.map((u: string) => deriveNameFromUrl(u)));
-      } else {
-        // fallback: filtrar localmente
-        setFormData(prev => ({
-          ...prev,
-          credentials: prev.credentials.filter((_, i) => i !== index)
-        }));
-        setCredentialNames(prev => prev.filter((_, i) => i !== index));
+      // Notificar especializaciones eliminadas automáticamente
+      if (result.removedSpecializations && result.removedSpecializations.length > 0) {
+        const removedNames = result.removedSpecializations.join(', ');
+        setUploadError(`✓ Credencial eliminada. Las siguientes especializaciones verificadas también fueron eliminadas: ${removedNames}`);
+        
+        // Recargar perfil para actualizar especializaciones
+        try {
+          const updatedProfile = await ApiUserService.getTutorProfile(auth.user.id_token);
+          setFormData(prev => ({
+            ...prev,
+            specializations: updatedProfile.specializations || []
+          }));
+        } catch (e) {
+          console.error('Error recargando especializaciones:', e);
+        }
       }
 
       // Mensaje informativo si backend indica verificación
-      if (typeof result?.userVerified === 'boolean' && !result.userVerified) {
+      if (typeof result?.tutorVerified === 'boolean' && !result.tutorVerified) {
         setUploadError('Se eliminaron las credenciales. Tu cuenta quedó no verificada.');
       }
     } catch (err) {
@@ -295,7 +313,7 @@ const EditProfilePage: React.FC = () => {
     setIsUploadingCredentials(true);
     setUploadError('');
     try {
-      const result: any = await ApiUserService.uploadTutorCredentials(auth.user.id_token, credentialFiles);
+      const result = await ApiUserService.uploadTutorCredentials(auth.user.id_token, credentialFiles) as UploadCredentialsResponse;
       // result: { totalFiles, uploaded, validated, rejected, savedCredentials: [url...], details: [...] }
       const savedUrls = result.savedCredentials || [];
       
@@ -311,6 +329,27 @@ const EditProfilePage: React.FC = () => {
       
       setCredentialFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      
+      // Mostrar especializaciones añadidas automáticamente
+      const addedSpecs = acceptedDetails
+        .filter((d: any) => d.addedSpecialization)
+        .map((d: any) => d.addedSpecialization);
+      
+      if (addedSpecs.length > 0) {
+        const specsText = addedSpecs.join(', ');
+        setUploadError(`✓ Credenciales subidas exitosamente. Se añadieron especializaciones verificadas: ${specsText}`);
+        
+        // Recargar perfil para actualizar especializaciones
+        try {
+          const updatedProfile = await ApiUserService.getTutorProfile(auth.user.id_token);
+          setFormData(prev => ({
+            ...prev,
+            specializations: updatedProfile.specializations || []
+          }));
+        } catch (e) {
+          console.error('Error recargando especializaciones:', e);
+        }
+      }
       
       // Mostrar mensaje si hubo archivos rechazados
       if (result.rejected && result.rejected > 0) {
@@ -735,12 +774,18 @@ const EditProfilePage: React.FC = () => {
                   </div>
                   <div className="tags-container">
                     {formData.specializations.map((spec, index) => (
-                      <span key={index} className="tag">
-                        {spec}
+                      <span 
+                        key={index} 
+                        className={`tag specialization-tag ${spec.verified ? 'verified' : 'manual'}`}
+                        title={spec.verified ? `Verificado por IA el ${new Date(spec.verifiedAt || '').toLocaleDateString()}` : 'Agregado manualmente'}
+                      >
+                        {spec.verified && <span className="verified-icon">✓</span>}
+                        {spec.name}
                         <button 
                           type="button" 
                           onClick={() => removeSpecialization(index)}
-                          disabled={isSaving}
+                          disabled={isSaving || spec.verified}
+                          className={spec.verified ? 'disabled-remove' : ''}
                         >
                           ×
                         </button>
@@ -748,6 +793,7 @@ const EditProfilePage: React.FC = () => {
                     ))}
                   </div>
                   {errors.specializations && <span className="error-message">{errors.specializations}</span>}
+                  <p className="help-text">Las especializaciones con ✓ fueron verificadas automáticamente. Para eliminarlas, elimina el documento asociado.</p>
                 </div>
               </div>
 

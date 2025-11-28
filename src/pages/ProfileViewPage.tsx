@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from 'react-oidc-context';
 import '../styles/EditProfilePage.css';
+import type { Specialization } from '../types/specialization';
 
 type RoleView = 'student' | 'tutor';
 
@@ -18,7 +19,7 @@ interface ProfileState {
     educationLevel?: string;
     // tutor
     bio?: string;
-    specializations?: string[];
+    specializations?: Specialization[]; // Ahora objetos Specialization
     credentials?: string[];
     // Tarifa en tokens por hora (tutor)
     tokensPerHour?: number;
@@ -128,10 +129,17 @@ const ProfileViewPage: React.FC = () => {
                 <div className="tags-container">
                   {Array.isArray((profile as any).specializations) && (profile as any).specializations.length > 0 ? (
                     <>
-                      {(profile as any).specializations.map((s: string) => (
-                        <span key={s} className="tag">{s}</span>
+                      {(profile as any).specializations.map((spec: Specialization, idx: number) => (
+                        <span 
+                          key={idx} 
+                          className={`tag specialization-tag ${spec.verified ? 'verified' : 'manual'}`}
+                          title={spec.verified ? `Verificado por IA - ${spec.source}` : 'Agregado manualmente'}
+                        >
+                          {spec.verified && <span className="verified-icon">✓</span>}
+                          {spec.name}
+                        </span>
                       ))}
-                      <input id="specializations" className="form-input" value={(profile as any).specializations.join(', ')} readOnly aria-hidden="true" tabIndex={-1} style={{ position: 'absolute', left: '-10000px' }} />
+                      <input id="specializations" className="form-input" value={(profile as any).specializations.map((s: Specialization) => s.name).join(', ')} readOnly aria-hidden="true" tabIndex={-1} style={{ position: 'absolute', left: '-10000px' }} />
                     </>
                   ) : (
                     <input id="specializations" className="form-input" value="—" disabled readOnly />

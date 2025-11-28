@@ -12,6 +12,7 @@ import ProfileIncompleteNotification from "../components/ProfileIncompleteNotifi
 import { AppHeader, type ActiveSection } from "./StudentDashboard";
 import { studentMenuNavigate } from "../utils/StudentMenu";
 import ApiPaymentService from "../service/Api-payment";
+import type { Specialization } from "../types/specialization";
 
 interface User {
   userId: string;
@@ -25,7 +26,7 @@ interface TutorCard {
   name: string;
   email: string;
   bio?: string;
-  specializations?: string[];
+  specializations?: Specialization[]; // Ahora objetos Specialization
   credentials?: string[];
   rating?: number;
   // Tarifa en tokens por hora definida por el tutor
@@ -155,8 +156,15 @@ const StudentFindsTutorsPage: React.FC = () => {
 
                   {tutor.specializations && tutor.specializations.length > 0 && (
                     <div className="tutor-tags">
-                      {tutor.specializations.map((s) => (
-                        <span key={s} className="tag">{s}</span>
+                      {tutor.specializations.map((spec, idx) => (
+                        <span 
+                          key={idx} 
+                          className={`tag specialization-tag ${spec.verified ? 'verified' : 'manual'}`}
+                          title={spec.verified ? `Verificado por IA - ${spec.source}` : 'Agregado manualmente'}
+                        >
+                          {spec.verified && <span className="verified-icon">✓</span>}
+                          {spec.name}
+                        </span>
                       ))}
                     </div>
                   )}

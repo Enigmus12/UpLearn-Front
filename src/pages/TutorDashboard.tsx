@@ -12,6 +12,7 @@ import TutorAvailabilityPage from './TutorAvailabilityPage';
 import TutorClassesPage from './TutorClassesPage';
 import TutorStudentsPage from './TutorStudentsPage';
 import TutorMeetingsNowPage from './TutorMeetingsNowPage';
+import type { Specialization } from '../types/specialization';
 
 interface User {
   userId: string;
@@ -19,7 +20,7 @@ interface User {
   email: string;
   role: string;
   bio?: string;
-  specializations?: string[];
+  specializations?: Specialization[]; // Ahora objetos Specialization
   credentials?: string[];
 }
 interface Student {
