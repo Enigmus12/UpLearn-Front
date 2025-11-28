@@ -1,446 +1,935 @@
-import React, { useEffect, useRef, useState } from 'react';
+// src/pages/CallPage.tsx
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useAuth } from 'react-oidc-context';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
+import { createCallSession, getIceServers } from '../service/Api-call';
+import CallChatButton from '../components/llamada/CallChatButton';
 import CallControls from '../components/llamada/CallControls';
-import { getIceServers } from '../service/Api-call';
 import '../styles/CallPage.css';
-
-// Tipos y Utilidades 
-type Envelope = {
-  type: string;
+ 
+/* ---------------------- Tipos de mensajes WS ---------------------- */
+ 
+type WsEnvelopeType =
+  | 'JOIN'
+  | 'JOIN_ACK'
+  | 'OFFER'
+  | 'ANSWER'
+  | 'ICE_CANDIDATE'
+  | 'RTC_CONNECTED'
+  | 'HEARTBEAT'
+  | 'PEER_JOINED'
+  | 'PEER_LEFT'
+  | 'END'
+  | 'ERROR';
+ 
+interface WsEnvelope {
+  type: WsEnvelopeType;
   sessionId: string;
   reservationId?: string;
   from?: string;
   to?: string;
   payload?: any;
-  ts: number;
-  traceId: string;
-};
-
-function ulid() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  ts?: number;
+  traceId?: string;
 }
-
-const getStatusClass = (state: string) => {
-  const s = state.toLowerCase();
-  if (s === 'connected' || s === 'completed' || s === 'stable') return 'connected';
-  if (s.includes('fail') || s.includes('close') || s.includes('error')) return 'failed';
-  return ''; 
-};
-
+ 
+interface JoinAckPayload {
+  initiator?: boolean;
+}
+ 
+/* ---------------------- Utilidades WebRTC ---------------------- */
+ 
+function wsProto() {
+  return window.location.protocol === 'https:' ? 'wss' : 'ws';
+}
+ 
+/**
+ * IMPORTANTE:
+ * Dejamos el SDP tal cual lo genera el navegador.
+ * Antes estábamos modificando parámetros Opus y eso puede generar audio trabado.
+ */
+function tuneOpusInSdp(sdp?: string) {
+  return sdp ?? '';
+}
+ 
+/**
+ * Normaliza ICE servers del backend
+ */
+function normalizeIceServers(raw: any): RTCIceServer[] {
+  const servers: RTCIceServer[] = [];
+ 
+  const isOk = (u: string) =>
+    /^(stun:|turns?:)/i.test(u) &&
+    !u.trim().startsWith('#') &&
+    !u.trim().startsWith('//');
+ 
+  const push = (u: string, src?: any) => {
+    const url = (u || '').trim();
+    if (!isOk(url)) return;
+    const ice: RTCIceServer = { urls: url };
+    if (src?.username) ice.username = src.username;
+    if (src?.credential) ice.credential = src.credential;
+    servers.push(ice);
+  };
+ 
+  if (Array.isArray(raw)) {
+    raw.forEach((e) => {
+      if (typeof e === 'string') {
+        push(e);
+      } else if (e && typeof e === 'object') {
+        const urls = e.urls ?? e.url;
+        if (Array.isArray(urls)) urls.forEach((u) => push(u, e));
+        else if (typeof urls === 'string') push(urls, e);
+      }
+    });
+  } else if (raw && typeof raw === 'object') {
+    const urls = raw.urls ?? raw.url;
+    if (Array.isArray(urls)) urls.forEach((u) => push(u, raw));
+    else if (typeof urls === 'string') push(urls, raw);
+  }
+ 
+  if (!servers.length) {
+    servers.push({ urls: 'stun:stun.l.google.com:19302' });
+  }
+  return servers;
+}
+ 
+/* ---------------------- Página de Llamada ---------------------- */
+ 
+type CallStatus = 'idle' | 'connecting' | 'connected' | 'failed' | 'closed';
+ 
+const MAX_RECONNECT_ATTEMPTS = 3;
+ 
 export default function CallPage() {
-  const { sessionId } = useParams<{ sessionId: string }>();
+  const { sessionId: sessionIdParam } = useParams<{ sessionId?: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
+ 
+  const search = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search],
+  );
+ 
   const auth = useAuth();
-
-  const userId = auth.user?.profile?.sub;
-  const token = (auth.user as any)?.id_token ?? auth.user?.access_token;
-
-  const [reservationId] = useState<string>(() => {
-    if (!sessionId) return '';
-    return sessionStorage.getItem('call:reservation:' + sessionId) || '';
-  });
-
-  // Refs de RTC y WS 
+  const token = useMemo(
+    () => auth.user?.id_token || auth.user?.access_token || '',
+    [auth.user],
+  );
+  const userId = useMemo(
+    () =>
+      (auth.user?.profile as any)?.sub ||
+      (auth.user?.profile as any)?.userId ||
+      (auth.user?.profile as any)?.preferred_username ||
+      '',
+    [auth.user],
+  );
+ 
+  const [status, setStatus] = useState<CallStatus>('idle');
+  const [sessionId, setSessionId] = useState<string | undefined>(sessionIdParam);
+  const [reservationId, setReservationId] = useState<string | undefined>(
+    search.get('reservationId') || undefined,
+  );
+ 
+  // refs globales
+  const sidRef = useRef<string | undefined>(sessionId);
+  const ridRef = useRef<string | undefined>(reservationId);
+  useEffect(() => {
+    sidRef.current = sessionId;
+  }, [sessionId]);
+  useEffect(() => {
+    ridRef.current = reservationId;
+  }, [reservationId]);
+ 
+  // refs media
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+ 
+  // WebRTC / WS
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-
-  // Elementos de Video
-  const localVideo = useRef<HTMLVideoElement>(null);
-  const remoteVideo = useRef<HTMLVideoElement>(null);
-
-  // Streams
-  const camStreamRef = useRef<MediaStream | null>(null);
-  const screenStreamRef = useRef<MediaStream | null>(null);
-
-  // Estado UI  
-  const [connState, setConnState] = useState<string>('Inicializando...');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isSharing, setIsSharing] = useState<boolean>(false);
-
-  // Colas y Flags Internos ---
-  const iceCandidatesQueue = useRef<RTCIceCandidate[]>([]);
-  const wsOpenRef = useRef(false);
-  const joinAckRef = useRef(false);
-  const sentOfferRef = useRef(false);
-  const gotRemoteDescRef = useRef(false);
-
-  // Debug State 
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const audioTxRef = useRef<RTCRtpTransceiver | null>(null);
+  const videoTxRef = useRef<RTCRtpTransceiver | null>(null);
+ 
+  // flags negociación
+  const wsReadyRef = useRef(false);
+  const ackReadyRef = useRef(false);
+  const initiatorRef = useRef(false);
+  const politeRef = useRef(false);
+  const makingOfferRef = useRef(false);
+  const ignoreOfferRef = useRef(false);
+  const peerPresentRef = useRef(false);
+  const mediaReadyRef = useRef(false);
+  const sentRtcConnectedRef = useRef(false);
+  const hbTimerRef = useRef<number | null>(null);
+  const pendingCandidatesRef = useRef<RTCIceCandidate[]>([]);
+  const startedRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  const manualCloseRef = useRef(false); // true cuando es cierre “normal”
+ 
   const [debug, setDebug] = useState({
-    wsState: 'N/A',
-    pcSignaling: 'N/A',
-    pcIce: 'N/A',
-    hasLocalMedia: 'no',
-    lastMsg: '' as string,
+    signaling: 'new',
+    ice: 'new',
+    gathering: 'new',
+    localTracks: { audio: 0, video: 0 },
+    remoteTracks: { audio: 0, video: 0 },
+    mediaError: '' as string | null,
   });
-
-  const updateDebug = (patch: Partial<typeof debug>) =>
-    setDebug((d) => ({ ...d, ...patch }));
-
-  const safeLog = (...args: any[]) => console.log('[CALL]', ...args);
-  const safeWarn = (...args: any[]) => console.warn('[CALL]', ...args);
-  const safeErr = (...args: any[]) => console.error('[CALL]', ...args);
-
-  // WebSocket Helper 
-  const send = (wsInstance: WebSocket | null, env: Partial<Envelope>) => {
-    if (!wsInstance) { safeWarn('send(): ws null'); return; }
-    if (wsInstance.readyState !== WebSocket.OPEN) {
-      safeWarn('send(): ws not OPEN, state=', wsInstance.readyState);
-      return;
+ 
+  const log = useCallback((label: string, data?: any) => {
+    // eslint-disable-next-line no-console
+    console.log('[CALL]', label, data ?? '');
+  }, []);
+ 
+  /* ---------------------- Limpieza ---------------------- */
+ 
+  const cleanup = useCallback(() => {
+    log('cleanup()');
+ 
+    manualCloseRef.current = true; // marcamos que el cierre fue intencional
+ 
+    if (hbTimerRef.current) {
+      window.clearInterval(hbTimerRef.current);
+      hbTimerRef.current = null;
     }
-    const payload = {
-      ...env,
-      sessionId,
-      reservationId,
-      from: userId,
-      ts: Date.now(),
-      traceId: ulid(),
-    };
-    safeLog('WS SEND =>', payload);
-    wsInstance.send(JSON.stringify(payload));
-  };
-
-  // Lógica de Negociación (Offer)
-  const maybeStartOffer = async () => {
-    const pc = pcRef.current;
-    if (!pc || sentOfferRef.current) {
-      if (!pc) safeWarn('maybeStartOffer(): no pc');
-      return;
-    }
-    const hasMedia = Boolean(localVideo.current?.srcObject as MediaStream | null);
-    if (!wsOpenRef.current || !joinAckRef.current || !hasMedia) {
-      safeLog('maybeStartOffer(): esperando condiciones', {
-        wsOpen: wsOpenRef.current, joinAck: joinAckRef.current, hasMedia
+ 
+    wsRef.current?.close();
+    wsRef.current = null;
+    wsReadyRef.current = false;
+    ackReadyRef.current = false;
+    initiatorRef.current = false;
+    politeRef.current = false;
+    makingOfferRef.current = false;
+    ignoreOfferRef.current = false;
+    peerPresentRef.current = false;
+    mediaReadyRef.current = false;
+    sentRtcConnectedRef.current = false;
+    pendingCandidatesRef.current = [];
+    reconnectAttemptsRef.current = 0;
+ 
+    if (pcRef.current) {
+      pcRef.current.getSenders().forEach((s) => {
+        if (s.track) s.track.stop();
       });
-      return;
+      pcRef.current.close();
+      pcRef.current = null;
     }
-    try {
-      sentOfferRef.current = true;
-      safeLog('Creando y enviando OFFER…');
-      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-      await pc.setLocalDescription(offer);
-      send(wsRef.current, { type: 'OFFER', payload: offer });
-    } catch (e) {
-      sentOfferRef.current = false;
-      safeErr('maybeStartOffer error', e);
+ 
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
     }
-  };
-
-  const startOffer = async () => {
-    safeLog('Botón Conectar pulsado');
-    await maybeStartOffer();
-  };
-
-  // Efecto Principal: Inicialización
-  useEffect(() => {
-    safeLog('MOUNT CallPage', { sessionId, reservationId, hasToken: !!token, userId });
-    updateDebug({ lastMsg: 'mount', hasLocalMedia: 'no' });
-
-    if (!sessionId || !reservationId) {
-      safeWarn('Faltan datos. sessionId/reservationId', { sessionId, reservationId });
-      setErrorMsg('Faltan datos de la sesión.');
-      return;
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current.getTracks().forEach((t) => t.stop());
+      remoteStreamRef.current = null;
     }
-    if (!token) {
-      if (!auth.isLoading && !auth.isAuthenticated) setErrorMsg('No autenticado');
-      return;
-    }
-
-    let isMounted = true;
-
-    const init = async () => {
+ 
+    setStatus('closed');
+  }, [log]);
+ 
+  /* ---------------------- Envío WS ---------------------- */
+ 
+  const sendWs = useCallback(
+    (msg: Partial<WsEnvelope>) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !sidRef.current) {
+        return;
+      }
+ 
+      const env: WsEnvelope = {
+        type: msg.type as WsEnvelopeType,
+        sessionId: sidRef.current!,
+        reservationId: ridRef.current,
+        from: userId,
+        ts: Date.now(),
+        ...msg,
+      } as WsEnvelope;
+ 
       try {
-        setConnState('Obteniendo servidores...');
-        const iceServers = await getIceServers();
-        if (!isMounted) return;
-
-        const pcLocal = new RTCPeerConnection({
-          iceServers,
-          bundlePolicy: 'max-bundle',
-          rtcpMuxPolicy: 'require',
-        });
-        pcRef.current = pcLocal;
-
-        // Media Local
-        setConnState('Accediendo a dispositivos...');
-        safeLog('Solicitando getUserMedia…');
-        const camStream: MediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        camStreamRef.current = camStream;
-        
-        if (localVideo.current) localVideo.current.srcObject = camStream;
-        camStream.getTracks().forEach((track: MediaStreamTrack) => pcLocal.addTrack(track, camStream));
-        updateDebug({ hasLocalMedia: 'sí' });
-
-        // Eventos RTC
-        pcLocal.ontrack = (ev) => {
-          safeLog('ontrack: stream remoto recibido');
-          if (remoteVideo.current) remoteVideo.current.srcObject = ev.streams[0];
-        };
-        
-        pcLocal.onicecandidate = (ev) => {
-          if (ev.candidate) {
-            send(wsRef.current, { type: 'ICE_CANDIDATE', payload: ev.candidate });
-          }
-        };
-
-        pcLocal.oniceconnectionstatechange = () => {
-          setConnState(pcLocal.iceConnectionState);
-          updateDebug({ pcIce: pcLocal.iceConnectionState });
-        };
-        
-        pcLocal.onsignalingstatechange = () => {
-          updateDebug({ pcSignaling: pcLocal.signalingState });
-        };
-        
-        pcLocal.onconnectionstatechange = () => {
-          setConnState(pcLocal.connectionState);
-        };
-
-        // WebSocket
-        const envHost = (import.meta as any)?.env?.VITE_CALLS_HOST || (window as any).__CALLS_HOST__;
-        const defaultHost = `${window.location.hostname}:8093`;
-        const host = envHost || defaultHost;
-        const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const wsBase = host.startsWith('http') ? new URL(host).host : host;
-        const wsUrl = `${scheme}://${wsBase}/ws/call?token=${encodeURIComponent(token)}`;
-
-        safeLog('Abriendo WS:', wsUrl);
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
-        updateDebug({ wsState: 'CONNECTING', lastMsg: 'ws-connecting' });
-        setConnState('Conectando al servidor...');
-
-        ws.onopen = () => {
-          wsOpenRef.current = true;
-          updateDebug({ wsState: 'OPEN', lastMsg: 'ws-open' });
-          send(ws, { type: 'JOIN' });
-        };
-
-        ws.onmessage = async (e) => {
-          if (!isMounted) return;
-          updateDebug({ lastMsg: 'ws-message' });
-          const msg: Envelope = JSON.parse(e.data);
-
-          if (msg.type === 'ERROR') {
-            setErrorMsg(String(msg?.payload?.message ?? 'Error en señalización'));
-            ws.close();
-            return;
-          }
-
-          if (msg.type === 'JOIN_ACK') {
-            joinAckRef.current = true;
-            setTimeout(() => startOffer(), 300);
-            await maybeStartOffer();
-            return;
-          }
-
-          if (msg.from === userId) return; 
-
-          try {
-            if (msg.type === 'OFFER') {
-              // Manejo de Glare simple
-              if (pcLocal.signalingState !== 'stable') {
-                await Promise.all([
-                  pcLocal.setLocalDescription({ type: 'rollback' } as any),
-                  pcLocal.setRemoteDescription(msg.payload as RTCSessionDescriptionInit),
-                ]);
-              } else {
-                await pcLocal.setRemoteDescription(msg.payload as RTCSessionDescriptionInit);
-              }
-              gotRemoteDescRef.current = true;
-              
-              // Procesar cola ICE
-              while (iceCandidatesQueue.current.length > 0) {
-                await pcLocal.addIceCandidate(iceCandidatesQueue.current.shift()!);
-              }
-              
-              const answer = await pcLocal.createAnswer();
-              await pcLocal.setLocalDescription(answer);
-              send(ws, { type: 'ANSWER', payload: answer });
-            } 
-            else if (msg.type === 'ANSWER') {
-              await pcLocal.setRemoteDescription(msg.payload as RTCSessionDescriptionInit);
-              gotRemoteDescRef.current = true;
-              while (iceCandidatesQueue.current.length > 0) {
-                await pcLocal.addIceCandidate(iceCandidatesQueue.current.shift()!);
-              }
-            } 
-            else if (msg.type === 'ICE_CANDIDATE') {
-              const candidate = new RTCIceCandidate(msg.payload);
-              if (pcLocal.remoteDescription) {
-                await pcLocal.addIceCandidate(candidate);
-              } else {
-                iceCandidatesQueue.current.push(candidate);
-              }
-            } 
-            else if (msg.type === 'END') {
-              ws.close();
-              navigate(-1);
-            }
-          } catch (err) {
-            safeErr('Error manejando WS message', err);
-          }
-        };
-
-        ws.onerror = (ev) => {
-          safeErr('WS ERROR', ev);
-          updateDebug({ wsState: 'ERROR', lastMsg: 'ws-error' });
-          setConnState('Error de conexión');
-        };
-
-        ws.onclose = (ev) => {
-          wsOpenRef.current = false;
-          updateDebug({ wsState: 'CLOSED', lastMsg: `ws-close(${ev.code})` });
-          if (!errorMsg) setConnState('Desconectado');
-        };
-
-      } catch (e: any) {
-        safeErr('init error', e);
-        setErrorMsg('Error inicializando la llamada.');
+        ws.send(JSON.stringify(env));
+        if (env.type !== 'HEARTBEAT') {
+          log('WS SEND', { type: env.type, sessionId: env.sessionId });
+        }
+      } catch (e) {
+        console.warn('[CALL] WS send failed', e);
+      }
+    },
+    [log, userId],
+  );
+ 
+  const notifyRtcConnected = useCallback(() => {
+    if (sentRtcConnectedRef.current) return;
+    sentRtcConnectedRef.current = true;
+    sendWs({ type: 'RTC_CONNECTED' });
+  }, [sendWs]);
+ 
+  /* ---------------------- PeerConnection ---------------------- */
+ 
+  const maybeNegotiate = useCallback(async () => {
+    const pc = pcRef.current;
+    if (!pc) return;
+    if (!initiatorRef.current) return;
+    if (!wsReadyRef.current || !ackReadyRef.current) return;
+    if (!peerPresentRef.current) return;
+    if (!mediaReadyRef.current) return;
+    if (pc.signalingState !== 'stable') return;
+    if (makingOfferRef.current) return;
+ 
+    try {
+      makingOfferRef.current = true;
+      log('maybeNegotiate: createOffer()', {
+        signaling: pc.signalingState,
+      });
+      const offer = await pc.createOffer();
+      offer.sdp = tuneOpusInSdp(offer.sdp);
+      await pc.setLocalDescription(offer);
+      sendWs({ type: 'OFFER', payload: pc.localDescription });
+      log('OFFER sent');
+    } catch (e) {
+      console.error('[CALL] Error creating offer', e);
+    } finally {
+      makingOfferRef.current = false;
+    }
+  }, [log, sendWs]);
+ 
+  const buildPeer = useCallback(async () => {
+    const rawIce = await getIceServers().catch(() => []);
+    const iceServers = normalizeIceServers(rawIce);
+    log('ICE servers', iceServers);
+ 
+    const pc = new RTCPeerConnection({
+      iceServers,
+      bundlePolicy: 'max-bundle',
+      iceCandidatePoolSize: 2,
+    });
+    pcRef.current = pc;
+ 
+    audioTxRef.current = pc.addTransceiver('audio', { direction: 'sendrecv' });
+    videoTxRef.current = pc.addTransceiver('video', { direction: 'sendrecv' });
+ 
+    remoteStreamRef.current = new MediaStream();
+ 
+    pc.ontrack = (ev) => {
+      const stream = remoteStreamRef.current!;
+      if (!stream.getTracks().some((t) => t.id === ev.track.id)) {
+        stream.addTrack(ev.track);
+      }
+ 
+      log('ontrack', {
+        kind: ev.track.kind,
+        id: ev.track.id,
+        currentTracks: {
+          audio: stream.getAudioTracks().length,
+          video: stream.getVideoTracks().length,
+        },
+      });
+ 
+      if (remoteVideoRef.current && ev.track.kind === 'video') {
+        remoteVideoRef.current.srcObject = stream;
+        // IMPORTANTE: el video remoto no debe sacar audio.
+        remoteVideoRef.current.muted = true;
+        (remoteVideoRef.current as any).volume = 0;
+        remoteVideoRef.current
+          .play()
+          .catch((e) => console.warn('[CALL] remote video play error', e));
+      }
+      if (remoteAudioRef.current && ev.track.kind === 'audio') {
+        remoteAudioRef.current.srcObject = stream;
+        remoteAudioRef.current.volume = 1.0;
+        remoteAudioRef.current
+          .play()
+          .catch((e) => console.warn('[CALL] remote audio play error', e));
+      }
+ 
+      setDebug((d) => ({
+        ...d,
+        remoteTracks: {
+          audio: stream.getAudioTracks().length,
+          video: stream.getVideoTracks().length,
+        },
+      }));
+    };
+ 
+    pc.onicecandidate = (e) => {
+      if (!wsReadyRef.current || !ackReadyRef.current) return;
+      if (e.candidate) {
+        sendWs({ type: 'ICE_CANDIDATE', payload: e.candidate });
       }
     };
-
-    init();
-
-    const hb = setInterval(() => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) send(wsRef.current, { type: 'HEARTBEAT' });
-    }, 10000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(hb);
-      try { wsRef.current?.close(); } catch { }
-      try { pcRef.current?.close(); } catch { }
-      
-      const stopAll = (s: MediaStream | null) => s?.getTracks().forEach((trk) => trk.stop());
-      stopAll(screenStreamRef.current);
-      stopAll(camStreamRef.current);
-      
-      wsOpenRef.current = false;
-      safeLog('UNMOUNT CallPage');
+ 
+    pc.oniceconnectionstatechange = () => {
+      const st = pc.iceConnectionState;
+      log('iceConnectionState', st);
+      setDebug((d) => ({ ...d, ice: st }));
+      if (st === 'connected' || st === 'completed') {
+        setStatus('connected');
+        notifyRtcConnected();
+      } else if (st === 'disconnected') {
+        setStatus('connecting');
+      } else if (st === 'failed') {
+        setStatus('failed');
+      }
     };
-  }, [sessionId, reservationId, token, auth.isLoading, auth.isAuthenticated]);
-
-
-  // Handlers de Controles 
-  const onToggleMic = () => {
-    const s: MediaStream | null = (localVideo.current?.srcObject as MediaStream) || camStreamRef.current;
-    s?.getAudioTracks().forEach((t) => (t.enabled = !t.enabled));
-  };
-
-  const onToggleCam = () => {
-    const s: MediaStream | null = (localVideo.current?.srcObject as MediaStream) || camStreamRef.current;
-    s?.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
-  };
-
-  const stopScreenShare = async () => {
-    const pc = pcRef.current;
-    if (!pc) return;
-    const camStream = camStreamRef.current;
-    const screenStream = screenStreamRef.current;
-
-    const camTrack = camStream?.getVideoTracks()[0];
-    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-
-    if (sender && camTrack) {
-      await sender.replaceTrack(camTrack);
-      if (localVideo.current && camStream) localVideo.current.srcObject = camStream;
-    }
-    screenStream?.getTracks().forEach(t => t.stop());
-    screenStreamRef.current = null;
-    setIsSharing(false);
-  };
-
-  const onShareScreen = async () => {
-    const pc = pcRef.current;
-    if (!pc) return;
-    if (isSharing) return stopScreenShare();
-
+ 
+    pc.onsignalingstatechange = () => {
+      setDebug((d) => ({ ...d, signaling: pc.signalingState }));
+      log('signalingState', pc.signalingState);
+    };
+    pc.onicegatheringstatechange = () => {
+      setDebug((d) => ({ ...d, gathering: pc.iceGatheringState }));
+    };
+ 
+    pc.onnegotiationneeded = () => {
+      log('onnegotiationneeded');
+      maybeNegotiate();
+    };
+    (pc as any).__maybeNegotiate = maybeNegotiate;
+ 
+    return pc;
+  }, [log, maybeNegotiate, notifyRtcConnected, sendWs]);
+ 
+  /* ---------------------- Media local ---------------------- */
+ 
+  const acquireLocalMedia = useCallback(async () => {
+    if (localStreamRef.current) return localStreamRef.current;
+ 
     try {
-      const displayStream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
-        video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false
+      // Audio simple: dejamos que el navegador elija el perfil adecuado.
+      const constraints: MediaStreamConstraints = {
+        audio: true,
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 360 },
+        },
+      };
+      log('getUserMedia: requesting', constraints);
+      const media = await navigator.mediaDevices.getUserMedia(constraints);
+      log('getUserMedia: success', {
+        audio: media.getAudioTracks().length,
+        video: media.getVideoTracks().length,
       });
-      const screenTrack = displayStream.getVideoTracks()[0];
-      if (!screenTrack) return;
-
-      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-      if (sender) await sender.replaceTrack(screenTrack);
-      else displayStream.getTracks().forEach(t => pc.addTrack(t, displayStream));
-
-      if (localVideo.current) localVideo.current.srcObject = displayStream;
-      screenStreamRef.current = displayStream;
-      setIsSharing(true);
-
-      screenTrack.addEventListener('ended', () => stopScreenShare().catch(() => {}));
-    } catch (err) {
-      safeErr('getDisplayMedia failed', err);
+ 
+      localStreamRef.current = media;
+ 
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = media;
+        localVideoRef.current.muted = true;
+        (localVideoRef.current as any).volume = 0;
+        localVideoRef.current
+          .play()
+          .catch((e) => console.warn('[CALL] local video play error', e));
+      }
+ 
+      setDebug((d) => ({
+        ...d,
+        localTracks: {
+          audio: media.getAudioTracks().length,
+          video: media.getVideoTracks().length,
+        },
+        mediaError: null,
+      }));
+ 
+      return media;
+    } catch (e: any) {
+      console.error('[CALL] Error acquiring media', e);
+      setDebug((d) => ({
+        ...d,
+        mediaError: `${e?.name || 'Error'}: ${e?.message || ''}`,
+      }));
+      // no limpiamos; dejamos que reciba medios remotos
+      return null;
     }
-  };
-
-  const onEnd = () => navigate(-1);
-
-  // Render
-
-  if (auth.isLoading) return <div className="call-loading">Cargando autenticación...</div>;
-  
-  if (errorMsg) return (
-    <div className="call-error">
-      <h2>Ocurrió un error</h2>
-      <p>{errorMsg}</p>
-      <pre>
-        Session ID: {sessionId}{"\n"}
-        User: {userId || 'Desconocido'}
-      </pre>
-      <button onClick={() => navigate(-1)} className="btn-connect-header" style={{marginTop: '1rem'}}>
-        Volver
-      </button>
-    </div>
+  }, [log]);
+ 
+  const addTracksToPc = useCallback(async () => {
+    const pc = pcRef.current;
+    if (!pc) return;
+ 
+    await acquireLocalMedia();
+    const stream = localStreamRef.current;
+ 
+    if (!stream) {
+      log('addTracksToPc: no localStream (solo recibirá medios)');
+      return;
+    }
+ 
+    const a = stream.getAudioTracks()[0] || null;
+    const v = stream.getVideoTracks()[0] || null;
+ 
+    log('addTracksToPc: attaching tracks', {
+      hasAudio: !!a,
+      hasVideo: !!v,
+    });
+ 
+    if (audioTxRef.current && a) {
+      await audioTxRef.current.sender.replaceTrack(a);
+      audioTxRef.current.direction = 'sendrecv';
+    }
+    if (videoTxRef.current && v) {
+      await videoTxRef.current.sender.replaceTrack(v);
+      videoTxRef.current.direction = 'sendrecv';
+    }
+ 
+    mediaReadyRef.current = !!(a || v);
+ 
+    setDebug((d) => ({
+      ...d,
+      localTracks: {
+        audio: stream.getAudioTracks().length,
+        video: stream.getVideoTracks().length,
+      },
+    }));
+ 
+    if (initiatorRef.current && mediaReadyRef.current) {
+      (pc as any).__maybeNegotiate?.();
+    }
+  }, [acquireLocalMedia, log]);
+ 
+  /* ---------------------- Mensajes WebSocket ---------------------- */
+ 
+  const onWsMessage = useCallback(
+    async (ev: MessageEvent) => {
+      const pc = pcRef.current;
+      if (!pc) return;
+ 
+      const msg: WsEnvelope = JSON.parse(ev.data);
+      if (msg.type !== 'HEARTBEAT') {
+        log('WS RECV', { type: msg.type, from: msg.from });
+      }
+ 
+      if (msg.from === userId && msg.type !== 'JOIN_ACK') return;
+      if (
+        msg.sessionId &&
+        sidRef.current &&
+        msg.sessionId !== sidRef.current &&
+        msg.type !== 'JOIN_ACK'
+      )
+        return;
+ 
+      if (msg.type === 'JOIN_ACK') {
+        const payload = (msg.payload || {}) as JoinAckPayload;
+        initiatorRef.current = !!payload.initiator;
+        politeRef.current = !payload.initiator;
+        ackReadyRef.current = true;
+ 
+        log('JOIN_ACK', payload);
+ 
+        if (msg.sessionId) {
+          sidRef.current = msg.sessionId;
+          setSessionId(msg.sessionId);
+        }
+        if (msg.reservationId) {
+          ridRef.current = msg.reservationId;
+          setReservationId(msg.reservationId);
+        }
+ 
+        await addTracksToPc();
+        return;
+      }
+ 
+      if (msg.type === 'PEER_JOINED') {
+        peerPresentRef.current = true;
+        log('PEER_JOINED');
+        setStatus('connecting');
+        if (initiatorRef.current && mediaReadyRef.current) {
+          (pc as any).__maybeNegotiate?.();
+        }
+        return;
+      }
+ 
+      if (msg.type === 'PEER_LEFT') {
+        peerPresentRef.current = false;
+        log('PEER_LEFT');
+        setStatus('connecting');
+        return;
+      }
+ 
+      if (msg.type === 'OFFER') {
+        await addTracksToPc();
+        const remote: RTCSessionDescriptionInit = msg.payload;
+        log('OFFER received', {
+          signaling: pc.signalingState,
+        });
+ 
+        const making = makingOfferRef.current;
+        const stable = pc.signalingState === 'stable';
+        const glare = remote.type === 'offer' && (making || !stable);
+ 
+        if (glare && !politeRef.current) {
+          ignoreOfferRef.current = true;
+          log('GLARE (impolite), ignoring offer');
+          return;
+        }
+        ignoreOfferRef.current = false;
+ 
+        if (glare && politeRef.current) {
+          log('GLARE (polite), rollback local');
+          await pc.setLocalDescription({ type: 'rollback' } as any);
+        }
+ 
+        await pc.setRemoteDescription(remote);
+ 
+        // procesar ICE pendiente
+        if (pendingCandidatesRef.current.length > 0) {
+          for (const c of pendingCandidatesRef.current) {
+            // eslint-disable-next-line no-await-in-loop
+            await pc.addIceCandidate(c).catch((e) =>
+              console.error('[CALL] addIceCandidate queued error', e),
+            );
+          }
+          pendingCandidatesRef.current = [];
+        }
+ 
+        const answer = await pc.createAnswer();
+        answer.sdp = tuneOpusInSdp(answer.sdp);
+        await pc.setLocalDescription(answer);
+        sendWs({ type: 'ANSWER', payload: pc.localDescription });
+        log('ANSWER sent');
+        return;
+      }
+ 
+      if (msg.type === 'ANSWER') {
+        log('ANSWER received', {
+          signaling: pc.signalingState,
+        });
+        if (pc.signalingState === 'have-local-offer') {
+          await pc.setRemoteDescription(msg.payload);
+ 
+          if (pendingCandidatesRef.current.length > 0) {
+            for (const c of pendingCandidatesRef.current) {
+              // eslint-disable-next-line no-await-in-loop
+              await pc.addIceCandidate(c).catch((e) =>
+                console.error('[CALL] addIceCandidate queued error', e),
+              );
+            }
+            pendingCandidatesRef.current = [];
+          }
+        }
+        return;
+      }
+ 
+      if (msg.type === 'ICE_CANDIDATE') {
+        if (ignoreOfferRef.current || !msg.payload) return;
+        const candidate = new RTCIceCandidate(msg.payload);
+        if (!pc.remoteDescription || pc.remoteDescription.type === 'rollback') {
+          pendingCandidatesRef.current.push(candidate);
+        } else {
+          await pc
+            .addIceCandidate(candidate)
+            .catch((e) =>
+              console.error('[CALL] addIceCandidate error', e),
+            );
+        }
+        return;
+      }
+ 
+      if (msg.type === 'END') {
+        // el otro finalizó la llamada
+        cleanup();
+        return;
+      }
+    },
+    [addTracksToPc, cleanup, log, userId],
   );
-
+ 
+  /* ---------------------- Inicio de la llamada ---------------------- */
+ 
+  const start = useCallback(async () => {
+    log('start()', {
+      sessionIdParam,
+      reservationIdParam: search.get('reservationId'),
+    });
+    setStatus('connecting');
+ 
+    manualCloseRef.current = false;
+ 
+    await buildPeer();
+    await acquireLocalMedia();
+ 
+    const ws = new WebSocket(
+      `${wsProto()}://localhost:8093/ws/call?token=${encodeURIComponent(
+        token,
+      )}`,
+    );
+    wsRef.current = ws;
+ 
+    ws.onopen = async () => {
+      wsReadyRef.current = true;
+      reconnectAttemptsRef.current = 0; // conexión establecida, reiniciamos contador
+      log('WS opened');
+ 
+      let sid = sidRef.current;
+      if (!sid) {
+        if (!ridRef.current) {
+          console.error('[CALL] Falta reservationId para crear la sesión');
+          return;
+        }
+        const created = await createCallSession(ridRef.current, token);
+        sid = created.sessionId;
+        sidRef.current = sid;
+        setSessionId(sid);
+        setReservationId(created.reservationId);
+        log('Session created', created);
+      }
+ 
+      const joinMsg: WsEnvelope = {
+        type: 'JOIN',
+        sessionId: sid!,
+        reservationId: ridRef.current,
+        from: userId,
+        ts: Date.now(),
+      };
+      ws.send(JSON.stringify(joinMsg));
+      log('JOIN sent', { sessionId: sid });
+ 
+      hbTimerRef.current = window.setInterval(
+        () => sendWs({ type: 'HEARTBEAT' }),
+        10_000,
+      ) as unknown as number;
+    };
+ 
+    ws.onmessage = onWsMessage;
+ 
+    ws.onclose = () => {
+      log('WS closed');
+      wsRef.current = null;
+      wsReadyRef.current = false;
+ 
+      if (manualCloseRef.current) {
+        // cierre normal: no reconectamos
+        return;
+      }
+ 
+      // cierre inesperado → intentamos reconectar
+      if (hbTimerRef.current) {
+        window.clearInterval(hbTimerRef.current);
+        hbTimerRef.current = null;
+      }
+ 
+      if (pcRef.current) {
+        pcRef.current.getSenders().forEach((s) => s.track && s.track.stop());
+        pcRef.current.close();
+        pcRef.current = null;
+      }
+      remoteStreamRef.current = null;
+      mediaReadyRef.current = !!localStreamRef.current;
+ 
+      reconnectAttemptsRef.current += 1;
+      if (reconnectAttemptsRef.current > MAX_RECONNECT_ATTEMPTS) {
+        log('Max reconnect attempts reached');
+        setStatus('failed');
+        return;
+      }
+ 
+      setStatus('connecting');
+      log('Scheduling reconnect', {
+        attempt: reconnectAttemptsRef.current,
+      });
+ 
+      setTimeout(() => {
+        if (!manualCloseRef.current) {
+          start(); // reintenta un nuevo WS y nuevo PC
+        }
+      }, 2000);
+    };
+ 
+    ws.onerror = (e) => {
+      console.error('[CALL] WS error', e);
+      setStatus('failed');
+    };
+  }, [
+    acquireLocalMedia,
+    buildPeer,
+    log,
+    onWsMessage,
+    sendWs,
+    sessionIdParam,
+    token,
+    userId,
+    search,
+  ]);
+ 
+  const endCall = useCallback(() => {
+    // finaliza llamada de forma explícita
+    sendWs({ type: 'END' });
+    cleanup();
+    navigate(-1); // vuelve a la página anterior
+  }, [cleanup, navigate, sendWs]);
+ 
+  /* ---------------------- Controles (mic/cam/share) ---------------------- */
+ 
+  const toggleMic = useCallback(() => {
+    const track = localStreamRef.current?.getAudioTracks()[0];
+    if (!track) {
+      log('toggleMic: NO audio track (posible NotReadable / sin permisos)');
+      return;
+    }
+    track.enabled = !track.enabled;
+    log('toggleMic', { enabled: track.enabled });
+  }, [log]);
+ 
+  const toggleCam = useCallback(() => {
+    const track = localStreamRef.current?.getVideoTracks()[0];
+    if (!track) {
+      log('toggleCam: NO video track (posible NotReadable / sin permisos)');
+      return;
+    }
+    track.enabled = !track.enabled;
+    log('toggleCam', { enabled: track.enabled });
+  }, [log]);
+ 
+  const shareScreen = useCallback(async () => {
+    const pc = pcRef.current;
+    if (!pc || !videoTxRef.current?.sender) {
+      log('shareScreen: no PC o no video sender');
+      return;
+    }
+ 
+    try {
+      log('shareScreen: getDisplayMedia()');
+      const display: MediaStream = await (navigator.mediaDevices as any)
+        .getDisplayMedia({
+          video: true,
+        });
+ 
+      const vTrack = display.getVideoTracks()[0];
+      if (!vTrack) {
+        log('shareScreen: no video track from display');
+        return;
+      }
+ 
+      await videoTxRef.current.sender.replaceTrack(vTrack);
+      mediaReadyRef.current = true;
+      log('shareScreen: track attached', {
+        id: vTrack.id,
+        label: vTrack.label,
+      });
+ 
+      if (initiatorRef.current) {
+        (pc as any).__maybeNegotiate?.();
+      }
+ 
+      vTrack.onended = async () => {
+        log('shareScreen: track ended, volviendo a cámara si existe');
+        const cam = localStreamRef.current?.getVideoTracks()[0] || null;
+        await videoTxRef.current?.sender.replaceTrack(cam);
+      };
+    } catch (e) {
+      console.warn('[CALL] shareScreen error', e);
+    }
+  }, [log]);
+ 
+  /* ---------------------- Efecto de montaje ---------------------- */
+ 
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    reconnectAttemptsRef.current = 0;
+    start();
+ 
+    return () => {
+      cleanup();
+    };
+  }, [cleanup, start]);
+ 
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      cleanup();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [cleanup]);
+ 
+  /* ---------------------- Render ---------------------- */
+ 
   return (
     <div className="call-page-container">
+      {/* Header flotante */}
       <div className="call-header">
-        <h1>Sesión en Vivo</h1>
-        
+        <h1>Sesión de llamada</h1>
         <div className="call-meta">
           <div className="status-badge">
-            <div className={`status-dot ${getStatusClass(connState)}`} />
-            <span className="status-text">{connState}</span>
+            <span
+              className={`status-dot ${
+                status === 'connected'
+                  ? 'connected'
+                  : status === 'failed' || status === 'closed'
+                  ? 'failed'
+                  : ''
+              }`}
+            />
+            <span>{status}</span>
           </div>
+          <CallChatButton />
         </div>
-
-        
       </div>
-
+ 
+      {/* Grid de video */}
       <div className="video-grid">
         <div className="remote-video-wrapper">
-          <video ref={remoteVideo} autoPlay playsInline className="remote-video" />
-        </div>
-        
-        <div className="local-video-wrapper">
-          <video ref={localVideo} autoPlay muted playsInline className="local-video" />
+          <video
+            ref={remoteVideoRef}
+            className="remote-video"
+            autoPlay
+            playsInline
+          />
+          <div className="local-video-wrapper">
+            <video
+              ref={localVideoRef}
+              className="local-video"
+              autoPlay
+              playsInline
+              muted
+            />
+          </div>
         </div>
       </div>
-
-      <div className="debug-panel">
-        <strong>Información Técnica</strong>
-        <div>WS State: {debug.wsState}</div>
-        <div>Signaling: {debug.pcSignaling}</div>
-        <div>ICE State: {debug.pcIce}</div>
-        <div>Local Media: {debug.hasLocalMedia}</div>
-        <div>Sharing: {isSharing ? 'Yes' : 'No'}</div>
-        <div style={{marginTop: 4, opacity: 0.7}}>{debug.lastMsg}</div>
-      </div>
-
+ 
+      {/* Dock de controles */}
       <div className="controls-dock">
         <CallControls
-          onToggleMic={onToggleMic}
-          onToggleCam={onToggleCam}
-          onShareScreen={onShareScreen}
-          onEnd={onEnd}
+          onToggleMic={toggleMic}
+          onToggleCam={toggleCam}
+          onShareScreen={shareScreen}
+          onEnd={endCall}
         />
+      </div>
+ 
+      {/* Audio remoto */}
+      <audio
+        ref={remoteAudioRef}
+        style={{ display: 'none' }}
+        autoPlay
+        playsInline
+      />
+ 
+      {/* Panel de debug */}
+      <div className="debug-panel">
+        <strong>Debug</strong>
+        <div>
+          signaling: {debug.signaling} / ice: {debug.ice} / gathering:{' '}
+          {debug.gathering}
+        </div>
+        <div>
+          local: a{debug.localTracks.audio}v{debug.localTracks.video} / remote:
+          a{debug.remoteTracks.audio}v{debug.remoteTracks.video}
+        </div>
+        {debug.mediaError && (
+          <div style={{ marginTop: 4, fontSize: 12, color: '#f87171' }}>
+            mediaError: {debug.mediaError}
+          </div>
+        )}
       </div>
     </div>
   );
 }
+ 
+ 
