@@ -1,20 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "react-oidc-context";
-
+ 
 import "../styles/Chat.css";
 import "../styles/StudentReservations.css";
-
+ 
 import { useAuthFlow } from "../utils/useAuthFlow";
 import { useProfileStatus } from "../utils/useProfileStatus";
 import { ENV } from "../utils/env";
-
+ 
 import {
   getMyReservations,
   cancelReservation,
   type Reservation as ApiReservation,
 } from "../service/Api-scheduler";
-
+ 
 import {
   ChatContact,
   ChatMessageData,
@@ -24,14 +24,13 @@ import {
 } from "../service/Api-chat";
 import { ChatSocket } from "../service/ChatSocket";
 import { createCallSession } from "../service/Api-call";
-
+ 
 import { AppHeader, type ActiveSection } from "./StudentDashboard";
 import ApiPaymentService from "../service/Api-payment";
-import ApiUserService from "../service/Api-user";
 import { studentMenuNavigate, type StudentMenuSection } from "../utils/StudentMenu";
-
-
-// Utilidades fecha/hora 
+ 
+ 
+// Utilidades fecha/hora
 function toISODateLocal(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -60,14 +59,14 @@ function isPresentReservation(r: ApiReservation, now: Date = new Date()): boolea
   const end = new Date(`${r.date}T${formatTime(r.end)}`);
   return end.getTime() >= now.getTime();
 }
-
+ 
 // Reglas de estado
 function getEffectiveStatus(res: ApiReservation): ApiReservation["status"] {
   const now = new Date();
   const startTime = new Date(`${res.date}T${formatTime(res.start)}`);
   const endTime = new Date(`${res.date}T${formatTime(res.end)}`);
   const raw = (res.status || "").toUpperCase();
-
+ 
   if (raw === "PENDIENTE") {
     if (now > endTime) return "VENCIDA";
     return "PENDIENTE";
@@ -86,12 +85,12 @@ function getEffectiveStatus(res: ApiReservation): ApiReservation["status"] {
   }
   return raw as ApiReservation["status"];
 }
-
-// Tipos propios 
+ 
+// Tipos propios
 interface User { userId: string; name: string; email: string; role: string; educationLevel?: string; }
 interface Reservation extends ApiReservation { effectiveStatus: ApiReservation["status"]; tutorName?: string; }
-
-// Chat helpers 
+ 
+// Chat helpers
 const mapAnyToServerShape = (raw: any, fallbackChatId: string): ChatMessageData => ({
   id: String(raw?.id ?? cryptoRandomId()),
   chatId: String(raw?.chatId ?? fallbackChatId),
@@ -117,7 +116,7 @@ function resolveTimestamp(m: unknown): string {
   }
   return new Date().toISOString();
 }
-
+ 
 const ChatMessageBubble: React.FC<{ message: ChatMessageData; isMine: boolean }> = ({ message, isMine }) => {
   const bubbleClass = isMine ? "chat-bubble mine" : "chat-bubble theirs";
   const ts = resolveTimestamp(message);
@@ -128,7 +127,7 @@ const ChatMessageBubble: React.FC<{ message: ChatMessageData; isMine: boolean }>
     </div>
   );
 };
-
+ 
 const ChatSidePanel: React.FC<{
   contact: ChatContact; myUserId: string; token: string; onClose: () => void;
 }> = ({ contact, myUserId, token, onClose }) => {
@@ -137,24 +136,33 @@ const ChatSidePanel: React.FC<{
   const [realChatId, setRealChatId] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<ChatSocket | null>(null);
-
+ 
   const lastStateRef = useRef<"connecting" | "open" | "closed" | "error" | null>(null);
   const lastChangeTsRef = useRef<number>(0);
   const closedOnceRef = useRef(false);
-
+ 
   const onWsState = (state: "connecting" | "open" | "closed" | "error") => {
     const now = Date.now();
-    if (state === "connecting" && lastStateRef.current === "connecting") return;
-    const noisyClosed = state === "closed" && lastStateRef.current === "connecting" && (now - lastChangeTsRef.current) < 500;
-    if (noisyClosed) return;
+ 
+    const prev = lastStateRef.current;
     lastStateRef.current = state;
     lastChangeTsRef.current = now;
+ 
+    if (state === "connecting") return;
+ 
+    if (state === "closed" && (now - lastChangeTsRef.current) < 800) {
+      return;
+    }
+ 
+    const hadOpen = prev === "open" || closedOnceRef.current;
+    if (!hadOpen) return;
+ 
     if ((state === "closed" || state === "error") && !closedOnceRef.current) {
       closedOnceRef.current = true;
       onClose();
     }
   };
-
+ 
   useEffect(() => {
     socketRef.current = new ChatSocket();
     socketRef.current.connect(
@@ -170,7 +178,7 @@ const ChatSidePanel: React.FC<{
     );
     return () => { socketRef.current?.disconnect(); socketRef.current = null; };
   }, [token, realChatId]);
-
+ 
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -190,16 +198,16 @@ const ChatSidePanel: React.FC<{
     })();
     return () => { mounted = false; };
   }, [contact.id, myUserId, token]);
-
+ 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
+ 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
     socketRef.current?.sendMessage(contact.id, newMessage);
     setNewMessage("");
   };
-
+ 
   return (
     <div className="chat-side-panel">
       <div className="chat-window-header">
@@ -219,11 +227,11 @@ const ChatSidePanel: React.FC<{
     </div>
   );
 };
-
+ 
 const StudentReservationsPage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
-
+ 
   const [token, setToken] = useState<string | undefined>(undefined);
   useEffect(() => {
     if (auth.isAuthenticated && auth.user) {
@@ -232,10 +240,10 @@ const StudentReservationsPage: React.FC = () => {
       setToken(undefined);
     }
   }, [auth.isAuthenticated, auth.user]);
-
+ 
   const { userRoles, isAuthenticated, needsRoleSelection } = useAuthFlow();
   useProfileStatus();
-
+ 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   useEffect(() => {
     if (isAuthenticated === null || userRoles === null) return;
@@ -251,18 +259,18 @@ const StudentReservationsPage: React.FC = () => {
       });
     }
   }, [isAuthenticated, userRoles, needsRoleSelection, navigate, auth.user]);
-
+ 
   const [activeChatContact, setActiveChatContact] = useState<ChatContact | null>(null);
   const myUserId = auth.user?.profile.sub;
-
+ 
   const [weekStart, setWeekStart] = useState(() => mondayOf(todayLocalISO()));
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
   const [reservationsLoading, setReservationsLoading] = useState(false);
-
+ 
   const [showAll, setShowAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
     const [tokenBalance, setTokenBalance] = useState<number>(0);
-
+ 
     // Cargar balance de tokens
     useEffect(() => {
       const token = (auth.user as any)?.id_token ?? auth.user?.access_token;
@@ -278,12 +286,12 @@ const StudentReservationsPage: React.FC = () => {
       loadBalance();
     }, [auth.user]);
   const RESERVATIONS_PER_PAGE = 15;
-
+ 
   const USERS_BASE = ENV.USERS_BASE;
   const PROFILE_PATH = ENV.USERS_PROFILE_PATH;
-
+ 
   const [profilesByTutorId, setProfilesByTutorId] = useState<Record<string, any>>({});
-
+ 
   const loadMyReservations = async () => {
     if (!token) return;
     const from = addDays(weekStart, -35);
@@ -299,10 +307,10 @@ const StudentReservationsPage: React.FC = () => {
       setReservationsLoading(false);
     }
   };
-
+ 
   useEffect(() => { if (token) loadMyReservations(); }, [token]);
   useEffect(() => { if (token) loadMyReservations(); }, [weekStart]);
-
+ 
   const fetchTutorProfile = async (idOrSub: string, token: string) => {
     const headers: Record<string, string> = { Accept: "application/json", Authorization: `Bearer ${token}` };
     const tryQuery = async (key: "id" | "sub") => {
@@ -313,18 +321,18 @@ const StudentReservationsPage: React.FC = () => {
     const prof = (await tryQuery("id")) ?? (await tryQuery("sub"));
     return { id: idOrSub, prof };
   };
-
+ 
   useEffect(() => {
     const ids = Array.from(new Set(myReservations.map(r => r?.tutorId).filter(Boolean)))
       .filter(id => !profilesByTutorId[id]);
     if (ids.length === 0 || !token) return;
-
+ 
     let cancelled = false;
     (async () => {
       try {
         const settled = await Promise.allSettled(ids.map(idOrSub => fetchTutorProfile(idOrSub, token)));
         if (cancelled) return;
-
+ 
         const next: Record<string, any> = {};
         for (const r of settled) {
           if (r.status === "fulfilled" && r.value.prof) {
@@ -346,18 +354,18 @@ const StudentReservationsPage: React.FC = () => {
     })();
     return () => { cancelled = true; };
   }, [myReservations, profilesByTutorId, USERS_BASE, PROFILE_PATH, token]);
-
+ 
   const tutorsWithRequestsOrReservations = useMemo(() => {
     const s = new Set<string>();
     for (const r of myReservations) if (r.tutorId) s.add(r.tutorId);
     return s.size;
   }, [myReservations]);
-
+ 
   const upcomingCount = useMemo(
     () => myReservations.filter(r => r.effectiveStatus !== "CANCELADO" && isPresentReservation(r)).length,
     [myReservations]
   );
-
+ 
   // Semana filtrada
   const weekReservations = myReservations.filter(r => {
     const resDate = new Date(r.date + "T00:00:00");
@@ -365,18 +373,18 @@ const StudentReservationsPage: React.FC = () => {
     const e = new Date(addDays(weekStart, 6) + "T23:59:59");
     return resDate >= s && resDate <= e;
   });
-
+ 
   // visibles
   const base = showAll ? weekReservations : weekReservations.filter(r => isPresentReservation(r));
   const visibleReservations = showAll ? base : base.filter(r => r.effectiveStatus !== "CANCELADO");
-
+ 
   const totalPages = Math.max(1, Math.ceil(visibleReservations.length / RESERVATIONS_PER_PAGE));
   const paginated = visibleReservations.slice(
     (currentPage - 1) * RESERVATIONS_PER_PAGE,
     currentPage * RESERVATIONS_PER_PAGE
   );
   useEffect(() => { setCurrentPage(1); }, [showAll, weekStart]);
-
+ 
   const cancelTutorReservation = async (res: Reservation) => {
     if (!token) return;
     const eff = (res.effectiveStatus || '').toUpperCase();
@@ -408,16 +416,16 @@ const StudentReservationsPage: React.FC = () => {
         try {
           const balanceData = await ApiPaymentService.getStudentBalance(token);
           setTokenBalance(balanceData.tokenBalance);
-          window.dispatchEvent(new CustomEvent('tokens:refresh'));
+          globalThis.dispatchEvent(new CustomEvent('tokens:refresh'));
         } catch (e) {
           console.warn('No se pudo refrescar balance inmediatamente:', e);
         }
       }
-
+ 
       await loadMyReservations();
     }
   };
-
+ 
   const openChatWithTutor = (tutorId: string) => {
     const prof = profilesByTutorId[tutorId];
     const name = prof?.name || "Tutor";
@@ -425,7 +433,7 @@ const StudentReservationsPage: React.FC = () => {
     const email = prof?.email || "N/A";
     setActiveChatContact({ id: tutorId, sub: tutorId, name, email, avatarUrl });
   };
-
+ 
   const joinNow = async (res: Reservation) => {
     try {
       if (!token) { alert("No hay sesión activa."); return; }
@@ -436,10 +444,10 @@ const StudentReservationsPage: React.FC = () => {
       alert("No se pudo iniciar la reunión: " + (e?.message ?? "error"));
     }
   };
-
+ 
   if (auth.isLoading) return <div className="full-center">⏳ Verificando acceso...</div>;
   if (!currentUser) return <div className="full-center">🔍 Cargando información...</div>;
-
+ 
   const statusBadge = (status?: string | null) => {
     const s = (status || "").toUpperCase();
     const styles: { [key: string]: { label: string; color: string; bg: string } } = {
@@ -453,31 +461,31 @@ const StudentReservationsPage: React.FC = () => {
     };
     return styles[s] || { label: s, color: "#6b7280", bg: "rgba(107,114,128,.12)" };
   };
-
+ 
   const onHeaderSectionChange = (section: ActiveSection) => {
     if (section === "none") return;
     studentMenuNavigate(navigate, section as StudentMenuSection);
   };
-
+ 
   return (
     <div className="dashboard-container">
-
+ 
       <AppHeader
         currentUser={currentUser}
         activeSection={"my-reservations"}
         onSectionChange={onHeaderSectionChange}
         tokenBalance={tokenBalance}
       />
-
+ 
       <main className="dashboard-main dashboard-main--tight">
         <div className="tasks-section">
           <h1>Mis Reservas 🗓️</h1>
-
+ 
           <div className="stats-grid" style={{ marginTop: 8, marginBottom: 16 }}>
             <div className="stat-card"><div className="stat-icon">🗓️</div><div className="stat-info"><h3>{upcomingCount}</h3><p>Reservas presentes</p></div></div>
             <div className="stat-card"><div className="stat-icon">🧑‍🏫</div><div className="stat-info"><h3>{tutorsWithRequestsOrReservations}</h3><p>Tutores con solicitudes/reservas</p></div></div>
           </div>
-
+ 
           <div className="page-with-chat-container">
             <div className={`main-content ${activeChatContact ? "chat-open" : ""}`}>
               <div className="card card--primary-soft reservations-panel">
@@ -489,11 +497,11 @@ const StudentReservationsPage: React.FC = () => {
                   >
                     « Anterior
                   </button>
-
+ 
                   <div className="week-toolbar__title">
                     Semana del {weekStart} al {addDays(weekStart, 6)}
                   </div>
-
+ 
                   <div style={{ display: "flex", gap: 8 }}>
                     <button
                       className="btn btn-nav"
@@ -503,7 +511,7 @@ const StudentReservationsPage: React.FC = () => {
                     >
                       {showAll ? "Mostrar presentes" : "Mostrar todas"}
                     </button>
-
+ 
                     <button
                       className="btn btn-ghost btn-nav"
                       onClick={() => setWeekStart(addDays(weekStart, 7))}
@@ -519,29 +527,29 @@ const StudentReservationsPage: React.FC = () => {
                     {showAll ? "No tienes reservas esta semana." : "No tienes reservas activas esta semana."}
                   </div>
                 )}
-
+ 
                 <div className="reservations-list">
                   {paginated.map((r) => {
                     const b = statusBadge(r.effectiveStatus);
                     const prof = profilesByTutorId[r.tutorId];
-                    const tutorName = prof?.name || (r as any).tutorName || "Tutor";
+                    const tutorName = prof?.name || r.tutorName || "Tutor";
                     const startMs = new Date(`${r.date}T${formatTime(r.start)}`).getTime();
                     const hoursUntilStart = (startMs - Date.now()) / (1000 * 60 * 60);
                     const canCancel = (r.effectiveStatus === 'PENDIENTE' || r.effectiveStatus === 'ACEPTADO') && hoursUntilStart >= 12;
                     const canContact = r.effectiveStatus === "ACEPTADO" || r.effectiveStatus === "INCUMPLIDA";
-
+ 
                     return (
                       <article key={r.id} className="reservation-card">
                         <header className="reservation-card__header">
                           <h3 className="reservation-card__title">Reserva con {tutorName}</h3>
                           <span className="status-pill" style={{ color: b.color, background: b.bg }}>{b.label}</span>
                         </header>
-
+ 
                         <div className="reservation-card__meta" style={{ marginTop: 6 }}>
                           <span>📅 {r.date}</span>
                           <span>🕒 {formatTime(r.start)} – {formatTime(r.end)}</span>
                         </div>
-
+ 
                         <div className="reservation-card__actions">
                           <button
                             type="button"
@@ -553,7 +561,7 @@ const StudentReservationsPage: React.FC = () => {
                           >
                             ▶ Reunirse ahora
                           </button>
-
+ 
                           <button
                             type="button"
                             className="btn btn-success"
@@ -563,7 +571,7 @@ const StudentReservationsPage: React.FC = () => {
                           >
                             Contactar
                           </button>
-
+ 
                           <button
                             type="button"
                             className="btn btn-danger"
@@ -578,7 +586,7 @@ const StudentReservationsPage: React.FC = () => {
                     );
                   })}
                 </div>
-
+ 
                 {visibleReservations.length > RESERVATIONS_PER_PAGE && (
                   <div className="pagination-controls" style={{ marginTop: "20px", textAlign: "center" }}>
                     <button className="btn btn-ghost" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} type="button">
@@ -594,7 +602,7 @@ const StudentReservationsPage: React.FC = () => {
                 )}
               </div>
             </div>
-
+ 
             {activeChatContact && myUserId && token && (
               <ChatSidePanel
                 contact={activeChatContact}
@@ -609,5 +617,7 @@ const StudentReservationsPage: React.FC = () => {
     </div>
   );
 };
-
+ 
 export default StudentReservationsPage;
+ 
+ 
