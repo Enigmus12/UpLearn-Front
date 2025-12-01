@@ -29,7 +29,7 @@ const HomePage: React.FC = () => {
     
     // Luego redirigir a Cognito para cerrar sesión
     const clientId = "342s18a96gl2pbaroorqh316l8";
-    const logoutUri = "http://localhost:3000";
+    const logoutUri = "https://witty-mud-01e94c60f.3.azurestaticapps.net:3000";
     const cognitoDomain = "https://us-east-18mvprkbvu.auth.us-east-1.amazoncognito.com";
     window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
