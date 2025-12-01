@@ -6,7 +6,7 @@ import './styles/index.css';
 const cognitoAuthConfig = {
   authority: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_8mvpRkbVu",
   client_id: "342s18a96gl2pbaroorqh316l8",
-  redirect_uri: "http://localhost:3000",
+  redirect_uri: "https://witty-mud-01e94c60f.3.azurestaticapps.net:3000",
   response_type: "code",
   scope: "email openid profile",
   extraQueryParams: {
