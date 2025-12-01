@@ -1,5 +1,7 @@
 // src/service/Api-call.ts
-const API_BASE_URL = 'http://localhost:8093';
+import { ENV } from '../utils/env';
+
+const API_BASE_URL = ENV.CALL_BASE;
  
 export async function createCallSession(reservationId: string, token: string) {
   const res = await fetch(`${API_BASE_URL}/api/calls/session`, {

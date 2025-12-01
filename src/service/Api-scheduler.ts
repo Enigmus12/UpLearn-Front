@@ -39,7 +39,7 @@ export interface Reservation {
   tutorAvatar?: string;
 }
 
-const BASE = (ENV.SCHEDULER_BASE || 'http://localhost:8090').replace(/\/$/, '');
+const BASE = (ENV.SCHEDULER_BASE || 'http://3.91.52.109:8090').replace(/\/$/, '');
 
 function headers(token?: string) {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };

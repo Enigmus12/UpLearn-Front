@@ -1,5 +1,7 @@
 // src/service/Api-search.js
-const API_BASE_URL = 'http://localhost:8080/Api-search';
+import { ENV } from '../utils/env';
+
+const API_BASE_URL = ENV.SEARCH_BASE;
  
 function normalizeBio(rawBio) {
   if (!rawBio) return '';

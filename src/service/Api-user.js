@@ -1,7 +1,8 @@
 // src/service/Api-user.js
 // Clase para manejar peticiones a la API de UpLearn y gestión de token
+import { ENV } from '../utils/env';
 
-const API_BASE_URL = 'http://localhost:8080/Api-user';
+const API_BASE_URL = ENV.USERS_BASE;
 
 class ApiUserService {
   static token = null;

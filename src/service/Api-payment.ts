@@ -1,4 +1,6 @@
-const PAYMENT_BASE_URL = 'http://localhost:8081/api'; 
+import { ENV } from '../utils/env';
+
+const PAYMENT_BASE_URL = ENV.PAYMENT_BASE; 
 
 export interface StripeCheckoutRequest {
   quantity: number;      // obligatorio
