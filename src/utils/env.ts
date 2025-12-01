@@ -5,13 +5,13 @@ export const ENV = {
   SCHEDULER_BASE:
     viteEnv.VITE_SCHEDULER_BASE_URL ||
     process.env.REACT_APP_SCHEDULER_API_BASE ||
-    'http://3.91.52.109:8090',
+    'https://reservations-ewdueehjfbfbbbg7.canadacentral-01.azurewebsites.net',
 
   // Base del users service. Para CRA ya incluye /Api-user
   USERS_BASE:
     viteEnv.VITE_USERS_BASE_URL ||
     process.env.REACT_APP_USER_API_BASE ||  
-    'http://54.210.217.249:8080/Api-user',
+    'https://user-ffeycgejdkejewag.canadacentral-01.azurewebsites.net/Api-user',
 
   // Ruta del endpoint público (si USERS_BASE ya incluye /Api-user, aquí solo /public/profile)
   USERS_PROFILE_PATH:
@@ -22,7 +22,7 @@ export const ENV = {
   PAYMENT_BASE:
     viteEnv.VITE_PAYMENT_BASE_URL ||
     process.env.REACT_APP_PAYMENT_API_BASE ||
-    'http://3.80.24.220:8081/api',
+    'https://walletservice-hxahh6ewh2ehghg5.canadacentral-01.azurewebsites.net/api',
 
   // Base del chat service
   CHAT_BASE:
@@ -40,5 +40,5 @@ export const ENV = {
   SEARCH_BASE:
     viteEnv.VITE_SEARCH_API_BASE_URL ||
     process.env.REACT_APP_SEARCH_API_BASE ||
-    'http://54.210.217.249:8080/Api-search',
+    'https://user-ffeycgejdkejewag.canadacentral-01.azurewebsites.net/Api-search',
 };
