@@ -1,6 +1,6 @@
 import { ENV } from '../utils/env';
 
-const CHAT_BASE = ((ENV as any).CHAT_API_BASE || 'http://localhost:8091').replace(/\/$/, '');
+const CHAT_BASE = ENV.CHAT_BASE.replace(/\/$/, '');
 
 export interface ChatContact {
   id: string;
